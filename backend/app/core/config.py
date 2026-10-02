@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import AnyHttpUrl, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
@@ -51,6 +52,9 @@ class Settings(BaseSettings):
     def validate_database_url(cls, value: str) -> str:
         if not value.startswith("sqlite:///") or not value.removeprefix("sqlite:///").strip():
             raise ValueError("DATABASE_URL must be a SQLite URL with a database path")
+        url = make_url(value)
+        if url.query or (url.database or "").startswith("file:"):
+            raise ValueError("DATABASE_URL query options and SQLite URI filenames are unsupported")
         return value
 
     @field_validator(

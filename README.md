@@ -36,6 +36,9 @@ Run the following PowerShell commands from the repository root.
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e './backend[dev]'
+Set-Location backend
+..\.venv\Scripts\python.exe -m alembic upgrade head
+Set-Location ..
 Set-Location frontend
 npm ci
 Set-Location ..
@@ -101,10 +104,9 @@ for repeat installs. Python dependency bounds live in `backend/pyproject.toml`.
 The production build is a compilation check; production API serving/routing
 will be designed in the release phase. `npm run preview` has no API proxy.
 
-Existing `data/downloads`, `data/temp`, and `data/thumbnails` directories remain
-empty foundations. Phase 00 contains no database or media features.
-Phase 01 adds validated settings, restricted CORS, centralized logging, and a
-stable API error envelope. The next planned phase is **Phase 02 — Database & Migrations**.
+Phase 02 adds the V1 database schema, migrations, and persistence repositories.
+Media directories remain empty; download/storage operations are later phases.
+The next planned phase is **Phase 03 — Download Engine Core**.
 
 ### Backend foundation configuration
 
@@ -119,7 +121,7 @@ normal FastAPI dependency overrides without a global settings cache.
 | `APP_ENV` | `development` | `development`, `test`, or `production` |
 | `APP_HOST` | `127.0.0.1` | IP address or hostname |
 | `APP_PORT` | `8000` | 1–65535 |
-| `DATABASE_URL` | `sqlite:///./data/videovault.db` | SQLite URL with a path; unused until Phase 02 |
+| `DATABASE_URL` | `sqlite:///./data/videovault.db` | SQLite path resolved against repository root |
 | `LOCAL_STORAGE_ROOT` | `./data/downloads` | Nonempty path |
 | `TEMP_STORAGE_ROOT` | `./data/temp` | Nonempty path |
 | `THUMBNAIL_STORAGE_ROOT` | `./data/thumbnails` | Nonempty path |
@@ -127,8 +129,8 @@ normal FastAPI dependency overrides without a global settings cache.
 | `DOWNLOAD_CONCURRENCY` | `3` | Positive integer; reserved for queue phases |
 | `FRONTEND_ORIGIN` | `http://127.0.0.1:5173` | One HTTP(S) origin, no credentials/path/query/fragment |
 
-Relative storage paths resolve against the repository root; absolute paths remain
-absolute. Settings do not create directories or open a database. `STORAGE_PROVIDER`
+Relative storage/database paths resolve against the repository root; absolute paths
+remain absolute. Startup does not create directories or migrate/open a database. `STORAGE_PROVIDER`
 and Google Drive placeholders in `.env.example` remain unused.
 
 Application log level is DEBUG in development and INFO in test/production, using
@@ -138,5 +140,38 @@ Public errors are defined in the API contract. CORS allows only `FRONTEND_ORIGIN
 and does not enable credentials. Its protocol-level rejected preflight response
 is the standard middleware response rather than an application error envelope.
 
-`app/db/session.py` reserves the database dependency and raises `NotImplementedError`
-if called. No production route calls it; SQLAlchemy and Alembic are Phase 02 work.
+### Database migrations
+
+From the repository root:
+
+```powershell
+Set-Location backend
+..\.venv\Scripts\python.exe -m alembic upgrade head
+..\.venv\Scripts\python.exe -m alembic current
+..\.venv\Scripts\python.exe -m alembic check
+```
+
+The default database is `<repository>/data/videovault.db`, regardless of the working
+directory. For another SQLite file, set `DATABASE_URL` in the root `.env` to a relative
+path or an absolute path such as `sqlite:///D:/VideoVault/data/videovault.db`.
+Its parent directory must exist. URL query options/SQLite URI filenames are unsupported.
+Application startup does not run migrations; health remains process-only.
+
+After changing model definitions, create and review a development migration:
+
+```powershell
+..\.venv\Scripts\python.exe -m alembic revision --autogenerate -m 'Describe schema change'
+..\.venv\Scripts\python.exe -m ruff format alembic
+..\.venv\Scripts\python.exe -m ruff check alembic
+..\.venv\Scripts\python.exe -m alembic upgrade head
+```
+
+Review generated constraints and deletion rules; Alembic autogeneration cannot detect
+every semantic change. Never delete/recreate the DB as the normal migration workflow.
+The initial `downgrade base` drops all V1 data: use only a temporary test DB or an
+explicitly intended rollback with a backup. The tests verify upgrade/downgrade/upgrade,
+CLI commands from another cwd, and schema/model parity on isolated temporary DBs.
+
+Repositories receive a Session, flush writes, and never commit. Services own explicit
+commit/rollback. The request dependency closes sessions and rolls back unfinished work.
+`docs/database.md` documents UTC timestamps, UUIDs, enum checks, and deletion rules.
