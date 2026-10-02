@@ -105,10 +105,10 @@ for repeat installs. Python dependency bounds live in `backend/pyproject.toml`.
 The production build is a compilation check; production API serving/routing
 will be designed in the release phase. `npm run preview` has no API proxy.
 
-Phase 03 adds the internal download engine, typed adapter contracts, isolated yt-dlp
+Phases 03–04 add the internal download engine and five platform adapters, isolated yt-dlp
 integration, capped format selection, temporary downloads, and ffprobe validation.
 There is no download API/UI or persistent job/history integration yet.
-The next planned phase is **Phase 04 — Platform Adapters**.
+The next planned phase is **Phase 05 — Persistent Queue & Worker**.
 
 ### Backend foundation configuration
 
@@ -178,7 +178,7 @@ Repositories receive a Session, flush writes, and never commit. Services own exp
 commit/rollback. The request dependency closes sessions and rolls back unfinished work.
 `docs/database.md` documents UTC timestamps, UUIDs, enum checks, and deletion rules.
 
-### Download engine (Phase 03)
+### Download engine and platform adapters (Phases 03–04)
 
 The service is an internal Python interface; calls perform blocking network/media I/O.
 From `backend/`, code can construct it using explicit centralized settings:
@@ -208,3 +208,17 @@ The downloader tests use mocks and generated local media. They also exercise rea
 yt-dlp/FFmpeg merge/remux over a loopback server, with no requests to public platforms.
 Missing media executables produce a clear integration-test skip; installed but broken
 tools fail tests. No live-platform availability is required for CI.
+
+The default registry selects concrete YouTube/Shorts, TikTok, Douyin, Instagram, and
+Facebook adapters for supported individual URLs. Each delegates to the same core and
+exposes resolve/download as implemented capabilities; profile listing, sorting, filtering
+and batch workflows remain unsupported. `service.capabilities()` returns internal reports.
+Supported URLs are documented in `docs/downloader.md`; profile/channel/playlist inputs
+fail before extraction. Douyin short links and `fb.watch` are not enabled in this phase.
+
+Platform support depends on the public source being resolvable through configured yt-dlp.
+No current live-site compatibility was verified. Login, private, age/account restrictions,
+cookies and challenge requirements return stable errors without bypass. The existing
+yt-dlp dependency is pinned to 2026.8.19 to keep its TikTok challenge-rejection guard
+reviewable; upgrades require reviewing that hook and rerunning tests. No cookie/browser
+session configuration or new scraping dependencies are introduced.

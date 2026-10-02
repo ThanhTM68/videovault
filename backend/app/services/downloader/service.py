@@ -6,7 +6,8 @@ from pathlib import Path
 from app.core.config import Settings
 from app.core.errors import AppError, MediaValidationError
 from app.models.enums import Platform
-from app.services.downloader.base import DownloaderAdapter, ProgressCallback
+from app.services.downloader.adapters.registry import AdapterRegistry
+from app.services.downloader.base import AdapterCapabilities, DownloaderAdapter, ProgressCallback
 from app.services.downloader.errors import DownloadFailedError, UnsupportedPlatformError
 from app.services.downloader.models import (
     DownloadRequest,
@@ -23,7 +24,6 @@ from app.services.downloader.paths import (
 from app.services.downloader.platform import detect_platform, validate_video_url
 from app.services.downloader.progress import ProgressReporter
 from app.services.downloader.selector import select_formats
-from app.services.downloader.ytdlp import YtDlpAdapter
 from app.services.media.probe import ProbeResult, probe_video
 
 logger = logging.getLogger(__name__)
@@ -41,19 +41,13 @@ class DownloaderService:
         self, settings: Settings, adapters: Mapping[Platform, DownloaderAdapter] | None = None
     ) -> None:
         self._settings = settings
-        if adapters is None:
-            core = YtDlpAdapter()
-            self._adapters: dict[Platform, DownloaderAdapter] = {
-                platform: core for platform in Platform
-            }
-        else:
-            self._adapters = dict(adapters)
+        self._registry = AdapterRegistry(adapters)
 
     def _adapter(self, url: str) -> DownloaderAdapter:
-        platform = detect_platform(url)
-        if not isinstance(platform, Platform) or platform not in self._adapters:
-            raise UnsupportedPlatformError()
-        return self._adapters[platform]
+        return self._registry.select(url)
+
+    def capabilities(self) -> dict[Platform, AdapterCapabilities]:
+        return self._registry.capabilities()
 
     def resolve(self, url: str) -> NormalizedVideo:
         url = validate_video_url(url)

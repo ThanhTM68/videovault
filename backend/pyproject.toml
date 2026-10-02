@@ -14,7 +14,7 @@ dependencies = [
     "uvicorn>=0.34,<1",
     "sqlalchemy>=2.0,<2.1",
     "alembic>=1.16,<2",
-    "yt-dlp>=2025.1,<2027",
+    "yt-dlp==2026.8.19",
 ]
 
 [project.optional-dependencies]

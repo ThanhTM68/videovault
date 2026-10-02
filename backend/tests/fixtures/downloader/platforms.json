@@ -1,0 +1,102 @@
+{
+  "youtube": {
+    "url": "https://www.youtube.com/shorts/TestVideo01",
+    "metadata": {
+      "id": "TestVideo01",
+      "extractor_key": "Youtube",
+      "extractor": "youtube",
+      "webpage_url": "https://www.youtube.com/watch?v=TestVideo01",
+      "title": "Synthetic YouTube sample",
+      "description": "Synthetic platform fixture",
+      "uploader": "fixture_handle",
+      "uploader_id": "fixture_handle",
+      "uploader_url": "https://www.youtube.com/@fixture_handle",
+      "channel": "Fixture Channel",
+      "channel_id": "UCFixtureChannel",
+      "channel_url": "https://www.youtube.com/channel/UCFixtureChannel",
+      "duration": 12.345,
+      "upload_date": "20260102",
+      "view_count": 1200,
+      "like_count": 0,
+      "comment_count": 12,
+      "thumbnail": "https://i.ytimg.com/vi/TestVideo01/default.jpg",
+      "formats": [
+        {"format_id": "high", "ext": "mp4", "vcodec": "avc1", "acodec": "mp4a", "width": 3840, "height": 2160, "fps": 30},
+        {"format_id": "capped", "ext": "mp4", "vcodec": "avc1", "acodec": "mp4a", "width": 1920, "height": 1080, "fps": 30}
+      ]
+    }
+  },
+  "tiktok": {
+    "url": "https://vm.tiktok.com/FixtureShort/",
+    "metadata": {
+      "id": 9007199254740993,
+      "extractor_key": "TikTok",
+      "webpage_url": "https://www.tiktok.com/@fixture_creator/video/9007199254740993",
+      "title": "Synthetic TikTok sample",
+      "description": "Synthetic caption",
+      "creator": "Fixture Creator",
+      "uploader": "fixture_creator",
+      "uploader_id": 9007199254740995,
+      "uploader_url": "https://www.tiktok.com/@fixture_creator",
+      "duration": 9.875,
+      "timestamp": 1767312000,
+      "view_count": "9007199254740993",
+      "like_count": 100,
+      "comment_count": null,
+      "formats": [{"format_id": "main", "ext": "mp4", "vcodec": "h264", "acodec": "aac", "width": 720, "height": 1080, "fps": 30}]
+    }
+  },
+  "douyin": {
+    "url": "https://www.douyin.com/video/9007199254740997",
+    "metadata": {
+      "id": "9007199254740997",
+      "extractor_key": "Douyin",
+      "webpage_url": "https://www.douyin.com/video/9007199254740997",
+      "title": "Synthetic Douyin sample",
+      "channel": "Fixture Display Name",
+      "uploader": "fixture_handle",
+      "uploader_id": "9007199254740999",
+      "uploader_url": "https://www.douyin.com/user/FixtureProfile",
+      "duration": 8.125,
+      "upload_date": "20260102",
+      "view_count": null,
+      "like_count": 0,
+      "formats": [{"format_id": "main", "ext": "mp4", "vcodec": "h264", "acodec": "aac", "width": 720, "height": 1280, "fps": 30}, {"format_id": "small", "ext": "mp4", "vcodec": "h264", "acodec": "aac", "width": 540, "height": 960}]
+    }
+  },
+  "instagram": {
+    "url": "https://www.instagram.com/reel/FixtureCode/",
+    "metadata": {
+      "id": "9007199254741001",
+      "extractor_key": "Instagram",
+      "webpage_url": "https://www.instagram.com/reel/FixtureCode/",
+      "title": "Synthetic Instagram sample",
+      "uploader": "fixture_creator",
+      "uploader_id": null,
+      "uploader_url": "https://www.instagram.com/fixture_creator/",
+      "timestamp": 1767312000,
+      "duration": 7.25,
+      "like_count": 22,
+      "formats": [{"format_id": "main", "ext": "mp4", "vcodec": "h264", "acodec": "aac", "width": 720, "height": 1080}]
+    }
+  },
+  "facebook": {
+    "url": "https://www.facebook.com/reel/9007199254741003",
+    "metadata": {
+      "id": "9007199254741003",
+      "extractor_key": "Facebook",
+      "webpage_url": "https://m.facebook.com/watch/?v=9007199254741003",
+      "title": "Synthetic Facebook sample",
+      "uploader": "Fixture Page",
+      "uploader_id": "9007199254741005",
+      "uploader_url": "https://www.facebook.com/fixture_page",
+      "duration": 6.375,
+      "view_count": 200,
+      "like_count": null,
+      "comment_count": "unknown",
+      "width": 640,
+      "height": 360,
+      "formats": [{"format_id": "main", "ext": "mp4", "vcodec": "h264", "acodec": "aac", "width": 640, "height": 360}]
+    }
+  }
+}

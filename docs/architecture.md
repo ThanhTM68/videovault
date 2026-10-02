@@ -54,11 +54,19 @@ metadata and a synchronous `DownloaderService.resolve/prepare_request/download` 
 The service owns URL classification, capped selection, isolated temporary workspaces,
 progress safety, failure cleanup, and validation before completion. The yt-dlp Python API
 is imported only by its wrapper. Repositories/routes are absent from this execution path.
-No API endpoint, job/history/media write, storage move, or platform-specific policy is added.
+No API endpoint, job/history/media write, or storage move is added.
 
-The generic adapter is shared safely because it has no mutable extractor state; each
-operation creates a new YoutubeDL instance. Future workers must run this blocking work
-outside request handlers. Platform-specific quirks and crawling belong to later adapters.
+Phase 04 adds AdapterRegistry and five concrete platform adapters. The existing common
+contract is preserved; policies own exact supported URL forms, extractor families,
+canonical pages and creator metadata. Registry selection is centralized, and the service
+provides internal capability reports. The shared wrapper accepts an immutable trusted
+ExtractionPolicy for normalization and restricted extractors; no user option dictionaries.
+The TikTok challenge hook is blocked, including for explicit generic core callers.
+yt-dlp is pinned to the tested version because this guard needs review on upgrades.
+
+Each operation creates a new YoutubeDL instance; adapters never share mutable extractor
+options or credentials. Future workers must run this blocking work outside request
+handlers. Profiles/playlist/multi-entry inputs remain rejected; crawling is future work.
 See `docs/downloader.md` for internal contracts, quality, authentication, and temp policy.
 
 ## Storage boundary
