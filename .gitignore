@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 .venv/
 __pycache__/
 .pytest_cache/
@@ -10,6 +12,12 @@ coverage/
 *.log
 *.sqlite
 *.sqlite3
+*.db
+*.db-shm
+*.db-wal
+*.egg-info/
+*.tsbuildinfo
+browser-profiles/
 data/downloads/*
 data/temp/*
 data/thumbnails/*
