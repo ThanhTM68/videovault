@@ -5,6 +5,9 @@ Base: `/api/v1`
 ## Health
 GET `/health`
 
+Returns HTTP 200 with `{"status":"ok"}`. This reports application-process health;
+it does not check database, storage, or external media services.
+
 ## Resolve
 POST `/videos/resolve`
 Body:
@@ -86,6 +89,27 @@ Errors:
 ```
 
 Do not expose raw stack traces to frontend.
+
+Phase 01 mappings:
+
+| Failure | HTTP status | Code |
+|---|---|---|
+| Base domain/application error | 400 | `APPLICATION_ERROR` |
+| Missing resource/route | 404 | `NOT_FOUND` |
+| Domain conflict | 409 | `CONFLICT` |
+| Request validation | 422 | `VALIDATION_ERROR` |
+| Unsupported HTTP method | 405 | `METHOD_NOT_ALLOWED` |
+| Other handled HTTP exception | Original status | `HTTP_ERROR` |
+| Unexpected exception | 500 | `INTERNAL_SERVER_ERROR` |
+
+Domain error messages/details are intentionally public. HTTP exception headers
+(for example `Allow` and `Retry-After`) are preserved. Validation details contain
+an `errors` list with `location`, `type`, and the generic message `Invalid value`;
+submitted values and validator context/messages are excluded. Unexpected errors
+return `An unexpected server error occurred` and empty details in every environment.
+Tests retain default exception re-raising to expose programming failures.
+CORS preflight responses follow the middleware protocol and are not application
+error responses. Only the configured frontend origin is allowed, without credentials.
 
 Paginated lists:
 - items
