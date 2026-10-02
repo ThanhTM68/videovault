@@ -9,6 +9,7 @@ Returns HTTP 200 with `{"status":"ok"}`. This reports application-process health
 it does not check database, storage, or external media services.
 
 ## Resolve
+Planned for a later phase; not implemented by Phase 05.
 POST `/videos/resolve`
 Body:
 - url
@@ -16,6 +17,26 @@ Body:
 Returns normalized metadata and downloaded-state summary.
 
 ## Download
+Phase 05 implements submission only. POST returns 202 after an atomic durable commit.
+Body is strict (unknown fields rejected):
+- urls: 1..100 HTTP(S) supported individual video URLs
+- max_height: optional integer 1..1080; defaults to DOWNLOAD_MAX_HEIGHT
+- preferred_container: mp4 (default), mkv or webm
+- audio_enabled: strict boolean, default true
+- storage_target: local only; this means existing temporary output, not permanent storage
+- force: false only; force/dedup and Drive values fail validation (422)
+
+Malformed input returns 422; unsupported platform/URL form returns the existing domain
+error (400). Either failure creates no jobs. Submitted URLs retain identity queries only.
+No network resolution occurs before submission returns. Response:
+```json
+{"jobs":[{"id":"uuid","status":"queued"}]}
+```
+Response describes submission state; polling may already show running work. Duplicate
+URLs create separate jobs; no history/dedup decisions are made. GET downloads/{id} and
+the broader behavior below remain planned; use GET jobs/{id} in Phase 05.
+
+Planned broader contract:
 POST `/downloads`
 Body:
 - urls[]
@@ -28,6 +49,20 @@ Returns created job IDs.
 GET `/downloads/{id}`
 
 ## Jobs
+All six job/queue operations below are implemented in Phase 05. GET jobs accepts
+optional status and type filters, page >=1 and page_size 1..100 (default 20). It returns
+items/page/page_size/total, ordered by created_at then id. Job views expose id/type/status,
+progress_percent, current_step, attempt_count/max_attempts, created_at/started_at/
+heartbeat_at/completed_at/cancelled_at/cancel_requested_at and nullable error {code,message}.
+Payloads, user URLs, extractor diagnostics and filesystem paths are excluded.
+
+Cancel queued work immediately; running work records a request and remains running
+until safe stop/cleanup. Repeated active requests are idempotent; terminal cancellation
+and retry of any state except failed return 409 CONFLICT. Retry retains started-attempt
+count, requires remaining capacity (default three attempts), resets runtime/error fields
+and returns queued. Unknown IDs return 404 NOT_FOUND. Mutations return the updated job.
+Pause/resume return {"paused":true/false}; pause blocks new claims only, and restart
+resumes by default. Polling is the only delivery mechanism; no SSE/WebSocket is added.
 GET `/jobs`
 GET `/jobs/{id}`
 POST `/jobs/{id}/cancel`

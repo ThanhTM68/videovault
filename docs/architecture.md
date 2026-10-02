@@ -115,6 +115,43 @@ Worker:
 
 Do not require Redis in V1.
 
+### Phase 05 implementation
+
+Routes delegate to QueueService -> JobRepository -> SQLite. A submission validates
+1..100 independent requests, writes all jobs in one transaction and returns 202 after
+commit. No extractor/network I/O occurs in submission. DownloadPayload contains only
+identity URL, capped height, container and audio flag; workers validate it again.
+
+The app owns one WorkerManager: recovery runs before starting DOWNLOAD_CONCURRENCY
+blocking worker threads (default 3). A separate supervisor maintains heartbeats every
+5 seconds and scans for stale orphaned work. No shared Session; reads and conditional
+writes each use short sessions, and downloader execution holds no transaction.
+SQLite claim is one UPDATE with a candidate subquery and RETURNING. Started-attempt
+count fences all worker writes; cancellation/completion/recovery compare current state.
+
+Use one backend process (no uvicorn --workers >1). This is a file-backed SQLite local
+queue, not a distributed lease protocol. Application construction remains lazy; normal
+lifespan startup requires migrations and opens the DB for recovery. Tests can explicitly
+use create_app(start_workers=False) for foundation/transport isolation, never inferred
+from APP_ENV. Startup does not migrate/create tables or storage directories.
+
+Pause serializes with claims and leaves active work running; it resets on restart.
+Only failed jobs may explicitly retry, up to max_attempts total started attempts (3).
+Running cancellation records cancel_requested_at, signals the invocation, and waits for
+safe cleanup before cancelled status. Checkpoints surround resolve/probe and download/
+postprocessing progress hooks; blocking extraction/FFmpeg can delay acknowledgement.
+
+Stale means last heartbeat (fallback started_at/created_at) older than 60 seconds.
+Recovery before startup and every 5 seconds requeues orphaned attempts below the limit,
+fails exhausted attempts with WORKER_LOST, and acknowledges stale cancellation requests.
+Fresh active rows stay running until a later scan. Periodic recovery excludes locally
+executing attempts; heartbeat failure signals their stop, never starts a concurrent copy.
+
+Shutdown stops claims, signals cancellation, and uses a five-second thread join budget
+(an outstanding short SQLite operation also has a finite lock timeout). A blocked daemon
+keeps the supervisor/engine until it exits; forced termination relies on restart recovery.
+Completed output remains temporary, without video/history/media/storage writes.
+
 ## Error categories
 
 Examples:

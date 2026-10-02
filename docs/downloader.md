@@ -188,6 +188,23 @@ callback boundary can support later cooperative cancellation; it does not implem
 
 ## Retry
 
+### Phase 05 cancellation integration
+
+DownloaderService.download accepts an optional per-invocation threading.Event. Its
+ContextVar scope keeps the existing adapter protocol unchanged and separates thread
+signals. ProgressReporter checks cancellation even with no observer and propagates
+DownloadCancelledError while still isolating ordinary observer failures. This reaches
+yt-dlp download/postprocessing hooks. The service also checks around resolve and probe;
+the existing checked workspace cleanup runs on cancellation.
+
+Blocking extraction/network/FFmpeg is cooperative: no arbitrary process termination,
+and cancellation can wait until a hook/operation returns. Queue workers acknowledge
+only after execution and cleanup stop; a cancel request racing a validated return uses
+discard_result to remove only that invocation's temporary workspace before acknowledgement.
+Completed callback alone never finalizes a durable job; successful return is required.
+These additions supersede the earlier Phase 03/04 deferral of cancellation above.
+No history/storage workflow or credential support is introduced.
+
 The core uses a finite 30-second network socket timeout and one retry for transport,
 fragments, and extractor operations. There is no service-level retry loop. User/CLI config
 is not loaded. No browser cookies, cookie file, netrc, login credentials, CAPTCHA handling,

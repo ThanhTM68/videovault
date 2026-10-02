@@ -2,12 +2,14 @@ import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Event
 
 from app.core.config import Settings
 from app.core.errors import AppError, MediaValidationError
 from app.models.enums import Platform
 from app.services.downloader.adapters.registry import AdapterRegistry
 from app.services.downloader.base import AdapterCapabilities, DownloaderAdapter, ProgressCallback
+from app.services.downloader.cancellation import cancellation_scope, check_cancelled
 from app.services.downloader.errors import DownloadFailedError, UnsupportedPlatformError
 from app.services.downloader.models import (
     DownloadRequest,
@@ -82,8 +84,19 @@ class DownloaderService:
         return request
 
     def download(
-        self, request: DownloadRequest, progress: ProgressCallback | None = None
+        self,
+        request: DownloadRequest,
+        progress: ProgressCallback | None = None,
+        *,
+        cancellation: Event | None = None,
     ) -> DownloadResult:
+        with cancellation_scope(cancellation):
+            return self._download(request, progress)
+
+    def _download(
+        self, request: DownloadRequest, progress: ProgressCallback | None
+    ) -> DownloadResult:
+        check_cancelled()
         root = self._settings.temp_storage_root
         confined_path(root, request.output_directory)
         adapter = self._adapter(request.url)
@@ -94,6 +107,7 @@ class DownloaderService:
         try:
             reporter(ProgressEvent(phase=ProgressPhase.RESOLVING))
             video = self.resolve(request.url)
+            check_cancelled()
             # Also enforce the configured ceiling for externally constructed requests.
             effective_height = min(request.max_height, self._settings.download_max_height)
             select_formats(
@@ -116,6 +130,7 @@ class DownloaderService:
             candidate = adapter.download(
                 video, execution_request, workspace / video_filename(video), adapter_progress
             )
+            check_cancelled()
             if candidate.is_symlink():
                 raise MediaValidationError()
             path = confined_path(workspace, candidate)
@@ -123,6 +138,7 @@ class DownloaderService:
                 raise MediaValidationError()
             reporter(ProgressEvent(phase=ProgressPhase.VALIDATING))
             probe = probe_video(path)
+            check_cancelled()
             if probe.height > effective_height or probe.has_audio != request.audio_enabled:
                 raise MediaValidationError()
             logger.info("Temporary video validation succeeded (%s)", video.platform.value)
@@ -141,3 +157,7 @@ class DownloaderService:
             if isinstance(exc, OSError):
                 raise DownloadFailedError() from None
             raise
+
+    def discard_result(self, result: DownloadResult) -> None:
+        """Remove only this invocation's validated temporary workspace."""
+        remove_workspace(self._settings.temp_storage_root, result.path.parent)

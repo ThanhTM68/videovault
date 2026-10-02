@@ -6,7 +6,9 @@ from app.core.config import Settings
 
 def test_configured_origin_is_allowed() -> None:
     origin = "http://localhost:5173"
-    application = create_app(Settings(_env_file=None, app_env="test", frontend_origin=origin))
+    application = create_app(
+        Settings(_env_file=None, app_env="test", frontend_origin=origin), start_workers=False
+    )
     with TestClient(application) as client:
         response = client.get("/api/v1/health", headers={"Origin": origin})
         preflight = client.options(

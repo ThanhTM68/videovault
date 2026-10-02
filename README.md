@@ -107,8 +107,10 @@ will be designed in the release phase. `npm run preview` has no API proxy.
 
 Phases 03–04 add the internal download engine and five platform adapters, isolated yt-dlp
 integration, capped format selection, temporary downloads, and ffprobe validation.
-There is no download API/UI or persistent job/history integration yet.
-The next planned phase is **Phase 05 — Persistent Queue & Worker**.
+Phase 05 adds durable download submission, polling, cancellation, retry and pause/resume
+APIs with a SQLite queue and in-process workers. Outputs remain temporary; history,
+dedup and storage/library integration are deferred. The current frontend is unchanged.
+The next planned phase is **Phase 06 — Frontend Shell, Quick Download & Queue**.
 
 ### Backend foundation configuration
 
@@ -128,11 +130,12 @@ normal FastAPI dependency overrides without a global settings cache.
 | `TEMP_STORAGE_ROOT` | `./data/temp` | Nonempty path |
 | `THUMBNAIL_STORAGE_ROOT` | `./data/thumbnails` | Nonempty path |
 | `DOWNLOAD_MAX_HEIGHT` | `1080` | 1–1080; download selection and final probe ceiling |
-| `DOWNLOAD_CONCURRENCY` | `3` | Positive integer; reserved for queue phases |
+| `DOWNLOAD_CONCURRENCY` | `3` | Positive integer; in-process download worker count |
 | `FRONTEND_ORIGIN` | `http://127.0.0.1:5173` | One HTTP(S) origin, no credentials/path/query/fragment |
 
 Relative storage/database paths resolve against the repository root; absolute paths
-remain absolute. Startup does not create directories or migrate/open a database. `STORAGE_PROVIDER`
+remain absolute. App construction is lazy; normal startup opens the migrated database
+for recovery, but does not migrate or create storage directories. `STORAGE_PROVIDER`
 and Google Drive placeholders in `.env.example` remain unused.
 
 Application log level is DEBUG in development and INFO in test/production, using
@@ -177,6 +180,48 @@ CLI commands from another cwd, and schema/model parity on isolated temporary DBs
 Repositories receive a Session, flush writes, and never commit. Services own explicit
 commit/rollback. The request dependency closes sessions and rolls back unfinished work.
 `docs/database.md` documents UTC timestamps, UUIDs, enum checks, and deletion rules.
+
+### Persistent queue (Phase 05)
+
+Run `alembic upgrade head` before starting the app (including existing Phase 02 databases:
+0002_queue is additive). Use one backend process; multiple uvicorn workers are unsupported.
+The app starts DOWNLOAD_CONCURRENCY worker threads (default 3) after stale-job recovery.
+Submission validates the entire batch before one commit and returns quickly without
+waiting for network/media operations:
+
+```powershell
+$body = '{"urls":["https://www.youtube.com/watch?v=YOUR_PUBLIC_VIDEO_ID"],"max_height":1080}'
+$submitted = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/downloads -ContentType application/json -Body $body
+$jobId = $submitted.jobs[0].id
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/jobs/$jobId"
+```
+
+Replace the example with public content you are authorized to store. Submit 1..100 URLs;
+container defaults to mp4 and audio to true. Only storage_target=local and force=false
+are accepted. Here local means existing TEMP_STORAGE_ROOT output, not a permanent library.
+The 202 response is {jobs:[{id,status:"queued"}]}; poll GET jobs/{id} or GET jobs (optional
+status/type/page/page_size). Jobs exclude URLs, internal payloads and result paths.
+
+POST queue/pause stops new claims; active work continues. POST queue/resume resumes;
+pause is runtime-only and restart resumes automatically. POST jobs/{id}/cancel immediately
+cancels queued jobs; active jobs retain running state with cancel_requested_at until
+cooperative execution and safe workspace cleanup finish. Blocking network/FFmpeg can
+delay acknowledgement. POST jobs/{id}/retry accepts failed jobs only; attempt_count means
+started attempts, with max_attempts=3 total. No automatic retry of download failures.
+Unknown jobs return 404, invalid operations 409, invalid/unsupported future options 422.
+
+An independent supervisor writes heartbeats every 5 seconds. At startup and periodically,
+orphaned running jobs with heartbeat older than 60 seconds requeue when attempts remain,
+otherwise fail with WORKER_LOST. Pending stale cancellation becomes cancelled. Fresh work
+stays running until stale; locally executing attempts are never requeued concurrently.
+Graceful shutdown stops claims, signals cancellation and joins for up to 5 seconds;
+blocked daemons retain supervision/DB ownership until they return. A pending short DB
+operation also has SQLite's finite lock timeout. Forced termination uses recovery.
+
+Completed media stays in checked UUID temporary directories. No job output-path API,
+permanent storage or history entry is implemented yet. Process crashes may leave orphaned
+temporary workspaces; garbage collection is deferred. No live-site tests are required;
+queue tests exercise real validation with generated media and controlled fake adapters.
 
 ### Download engine and platform adapters (Phases 03–04)
 
