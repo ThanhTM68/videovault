@@ -27,7 +27,8 @@ This project must not implement DRM/access-control/private-content bypasses.
 ## Local development
 
 Requirements: Python 3.12+, Node 22.12+ (Node 24 LTS recommended), npm, and Git.
-FFmpeg/ffprobe are needed in later media phases. Docker is not required.
+FFmpeg and ffprobe must be globally installed and available on PATH for downloads and
+real local-media integration tests. Docker is not required.
 Run the following PowerShell commands from the repository root.
 
 ### First-time setup
@@ -104,9 +105,10 @@ for repeat installs. Python dependency bounds live in `backend/pyproject.toml`.
 The production build is a compilation check; production API serving/routing
 will be designed in the release phase. `npm run preview` has no API proxy.
 
-Phase 02 adds the V1 database schema, migrations, and persistence repositories.
-Media directories remain empty; download/storage operations are later phases.
-The next planned phase is **Phase 03 — Download Engine Core**.
+Phase 03 adds the internal download engine, typed adapter contracts, isolated yt-dlp
+integration, capped format selection, temporary downloads, and ffprobe validation.
+There is no download API/UI or persistent job/history integration yet.
+The next planned phase is **Phase 04 — Platform Adapters**.
 
 ### Backend foundation configuration
 
@@ -125,7 +127,7 @@ normal FastAPI dependency overrides without a global settings cache.
 | `LOCAL_STORAGE_ROOT` | `./data/downloads` | Nonempty path |
 | `TEMP_STORAGE_ROOT` | `./data/temp` | Nonempty path |
 | `THUMBNAIL_STORAGE_ROOT` | `./data/thumbnails` | Nonempty path |
-| `DOWNLOAD_MAX_HEIGHT` | `1080` | 1–1080; reserved for downloader phases |
+| `DOWNLOAD_MAX_HEIGHT` | `1080` | 1–1080; download selection and final probe ceiling |
 | `DOWNLOAD_CONCURRENCY` | `3` | Positive integer; reserved for queue phases |
 | `FRONTEND_ORIGIN` | `http://127.0.0.1:5173` | One HTTP(S) origin, no credentials/path/query/fragment |
 
@@ -175,3 +177,34 @@ CLI commands from another cwd, and schema/model parity on isolated temporary DBs
 Repositories receive a Session, flush writes, and never commit. Services own explicit
 commit/rollback. The request dependency closes sessions and rolls back unfinished work.
 `docs/database.md` documents UTC timestamps, UUIDs, enum checks, and deletion rules.
+
+### Download engine (Phase 03)
+
+The service is an internal Python interface; calls perform blocking network/media I/O.
+From `backend/`, code can construct it using explicit centralized settings:
+
+```python
+from app.core.config import Settings
+from app.services.downloader.service import DownloaderService
+
+service = DownloaderService(Settings())
+# Explicit invocation only, using a public video you are authorized to store:
+# request = service.prepare_request(public_video_url)
+# result = service.download(request, progress=observe_progress)
+# result.path is validated temporary output; the caller owns its lifecycle.
+```
+
+Outputs go into UUID directories beneath `TEMP_STORAGE_ROOT`, never directly into the
+permanent library. Failed downloads clean up their own workspace. Selection prefers the
+highest known height within `DOWNLOAD_MAX_HEIGHT` (default 1080), then fps/bitrate and
+compatibility. Separate streams merge and containers remux without forced re-encoding.
+Unknown heights, DRM, playlists, live streams, and unsupported URLs fail cleanly.
+Authentication-required content has no cookie/login configuration in this phase.
+
+`audio_enabled=False` requires video-only input. Incompatible container/codec remuxes
+fail; automatic transcoding is deferred. See `docs/downloader.md` for complete policy.
+
+The downloader tests use mocks and generated local media. They also exercise real
+yt-dlp/FFmpeg merge/remux over a loopback server, with no requests to public platforms.
+Missing media executables produce a clear integration-test skip; installed but broken
+tools fail tests. No live-platform availability is required for CI.

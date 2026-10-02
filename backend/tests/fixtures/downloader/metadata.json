@@ -1,0 +1,36 @@
+{
+  "combined": {
+    "id": "fixture-video",
+    "webpage_url": "https://www.youtube.com/watch?v=fixture-video",
+    "title": "Local research fixture",
+    "description": "Synthetic metadata, never extracted from a live site.",
+    "uploader": "Fixture creator",
+    "uploader_id": "fixture-creator",
+    "uploader_url": "https://www.youtube.com/@fixture",
+    "duration": 0.3,
+    "upload_date": "20260102",
+    "view_count": 500,
+    "like_count": 30,
+    "comment_count": 4,
+    "width": 64,
+    "height": 48,
+    "fps": 10,
+    "thumbnail": "https://images.example.com/thumb.jpg",
+    "formats": [
+      {"format_id": "combined", "ext": "mp4", "vcodec": "mpeg4", "acodec": "aac", "width": 64, "height": 48, "fps": 10, "tbr": 200}
+    ]
+  },
+  "separate": {
+    "id": "fixture-video",
+    "title": "Separate streams",
+    "formats": [
+      {"format_id": "2160", "ext": "webm", "vcodec": "vp9", "acodec": "none", "height": 2160},
+      {"format_id": "1080", "ext": "webm", "vcodec": "vp9", "acodec": "none", "height": 1080},
+      {"format_id": "720", "ext": "mp4", "vcodec": "avc1", "acodec": "mp4a", "height": 720},
+      {"format_id": "audio", "ext": "m4a", "vcodec": "none", "acodec": "mp4a", "abr": 128}
+    ]
+  },
+  "minimal": {"id": "fixture-video"},
+  "private": {"id": "fixture-video", "availability": "private"},
+  "unavailable": {"id": "fixture-video", "has_drm": true}
+}

@@ -49,15 +49,17 @@ See `docs/database.md` for timestamp, identity, enum, history, and deletion poli
 
 ## Downloader boundary
 
-Interface concept:
+Phase 03 implements `DownloaderAdapter.resolve/get_formats/download` with capability
+metadata and a synchronous `DownloaderService.resolve/prepare_request/download` facade.
+The service owns URL classification, capped selection, isolated temporary workspaces,
+progress safety, failure cleanup, and validation before completion. The yt-dlp Python API
+is imported only by its wrapper. Repositories/routes are absent from this execution path.
+No API endpoint, job/history/media write, storage move, or platform-specific policy is added.
 
-- resolve_url(url) -> NormalizedVideo
-- list_source(source, options) -> list[NormalizedVideo]
-- get_formats(video) -> formats
-- build_download_request(video, options)
-- execute_download(request, progress_callback)
-
-Platform-specific quirks belong in adapters.
+The generic adapter is shared safely because it has no mutable extractor state; each
+operation creates a new YoutubeDL instance. Future workers must run this blocking work
+outside request handlers. Platform-specific quirks and crawling belong to later adapters.
+See `docs/downloader.md` for internal contracts, quality, authentication, and temp policy.
 
 ## Storage boundary
 
@@ -86,6 +88,11 @@ MediaService:
 - hash
 
 All ffmpeg/ffprobe command construction is isolated here.
+
+Phase 03 implements only `services/media/probe.py`: globally discovered ffprobe,
+argv invocation with a timeout, normalized duration/dimensions/size/audio validation.
+yt-dlp manages its own FFmpeg merge/remux behind the downloader wrapper. The broader
+editing/media operations above are future work; no media binaries are bundled.
 
 ## Queue
 
