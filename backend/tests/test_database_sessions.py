@@ -85,7 +85,7 @@ def test_failed_request_rolls_back_and_releases_session(
 def test_engine_is_disposed_on_shutdown(
     settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    application = create_app(settings)
+    application = create_app(settings, start_workers=False)
     engine = application.state.engine
     original_dispose = engine.dispose
     disposed: list[bool] = []

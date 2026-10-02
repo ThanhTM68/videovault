@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from pydantic import JsonValue
-from sqlalchemy import JSON, CheckConstraint, Text
+from sqlalchemy import JSON, CheckConstraint, Index, Text
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 class Job(IdentityMixin, CreatedMixin, Base):
     __tablename__ = "jobs"
     __table_args__ = (
+        Index("ix_jobs_queue", "type", "status", "created_at"),
         CheckConstraint("length(trim(type)) > 0", name="type_nonempty"),
         CheckConstraint("progress_percent BETWEEN 0 AND 100", name="progress_range"),
         CheckConstraint("attempt_count >= 0", name="attempts_nonnegative"),
@@ -40,4 +41,5 @@ class Job(IdentityMixin, CreatedMixin, Base):
     heartbeat_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     cancelled_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     downloads: Mapped[list["Download"]] = relationship(back_populates="job", passive_deletes="all")

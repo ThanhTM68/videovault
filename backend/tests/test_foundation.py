@@ -14,7 +14,7 @@ from app.core.logging import configure_logging
 def test_settings_are_scoped_to_application(settings: Settings) -> None:
     other = Settings(_env_file=None, app_env="test", download_concurrency=7)
     for configured in (settings, other):
-        application = create_app(configured)
+        application = create_app(configured, start_workers=False)
 
         @application.get("/api/v1/test-settings")
         def read_settings(current: Annotated[Settings, Depends(get_settings)]) -> dict[str, int]:
@@ -54,4 +54,13 @@ def test_logging_level_and_idempotence(environment: str, level: int) -> None:
 
 def test_no_test_routes_in_default_application(settings: Settings) -> None:
     application = create_app(settings)
-    assert set(application.openapi()["paths"]) == {"/api/v1/health"}
+    assert set(application.openapi()["paths"]) == {
+        "/api/v1/health",
+        "/api/v1/downloads",
+        "/api/v1/jobs",
+        "/api/v1/jobs/{job_id}",
+        "/api/v1/jobs/{job_id}/cancel",
+        "/api/v1/jobs/{job_id}/retry",
+        "/api/v1/queue/pause",
+        "/api/v1/queue/resume",
+    }

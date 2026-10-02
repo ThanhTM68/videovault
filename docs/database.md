@@ -182,6 +182,27 @@ History logic should query successful downloads.
 - heartbeat_at nullable
 - completed_at nullable
 - cancelled_at nullable
+- cancel_requested_at nullable (0002_queue; request time, distinct from acknowledgement)
+
+### Phase 05 queue extension
+
+Revision 0002_queue adds cancel_requested_at and ix_jobs_queue(type, status, created_at).
+0001_v1 is unchanged. Upgrade/downgrade/re-upgrade preserves existing job rows; downgrade
+removes request timestamps and the index. Back up real databases before rollback.
+
+QueueService owns commits; repository claims/updates return changed rows. Claim is a
+single conditional UPDATE with a queued-candidate subquery, not a read then write or
+SELECT FOR UPDATE. Each started claim increments attempt_count; updates compare that
+attempt and running status, preventing an old attempt from mutating a replacement.
+Completion additionally requires no cancellation request. Recovery rechecks heartbeat,
+status, attempt and observed cancellation timestamp to avoid overwriting fresh work.
+
+Existing progress_percent remains nonnullable: unknown/reset is 0, pre-success maximum
+99 and successful completion 100. current_step distinguishes validating from processing.
+cancelled_at records acknowledgement; completed_at timestamps all terminal outcomes.
+Retry clears runtime/error/request fields, retains attempt_count. max_attempts defaults
+to 3 total started attempts. Queue pause is runtime state, without a settings table.
+No results/history/media rows or permanent library references are added in this phase.
 
 ### collections
 - id

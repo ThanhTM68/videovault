@@ -14,6 +14,7 @@ from app.core.config import Settings
 from app.core.errors import AppError
 from app.models.enums import Platform
 from app.services.downloader import ytdlp
+from app.services.downloader.cancellation import DownloadCancelledError, cancellation_scope
 from app.services.downloader.errors import (
     AuthenticationRequiredError,
     DownloadFailedError,
@@ -175,6 +176,30 @@ def test_postprocessing_failure_mapped(monkeypatch: pytest.MonkeyPatch, tmp_path
             lambda event: None,
         )
     assert "secret-token" not in str(error.value)
+
+
+@pytest.mark.parametrize("hook_name", ["progress_hooks", "postprocessor_hooks"])
+def test_cancellation_reaches_shared_ytdlp_hooks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, hook_name: str
+) -> None:
+    factory, instance = mock_extractor(monkeypatch, FIXTURES["combined"])
+    monkeypatch.setattr(ytdlp, "require_tool", lambda name: "ffmpeg")
+    signal = threading.Event()
+
+    def processing(*args: object, **kwargs: object) -> None:
+        signal.set()
+        raw = {"status": "downloading" if hook_name == "progress_hooks" else "started"}
+        factory.call_args.args[0][hook_name][0](raw)
+
+    instance.process_ie_result.side_effect = processing
+    video = normalize_metadata(FIXTURES["combined"], Platform.YOUTUBE, URL)
+    with cancellation_scope(signal), pytest.raises(DownloadCancelledError):
+        ytdlp.YtDlpAdapter().download(
+            video,
+            DownloadRequest(url=URL, output_directory=tmp_path),
+            tmp_path / "safe",
+            lambda event: None,
+        )
 
 
 @pytest.mark.parametrize("mode", ["split", "progressive_mkv"])

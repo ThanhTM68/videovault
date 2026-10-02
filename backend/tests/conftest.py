@@ -35,7 +35,9 @@ def settings(tmp_path: Path) -> Settings:
 
 @pytest.fixture
 def application(settings: Settings) -> FastAPI:
-    return create_app(settings)
+    # Foundation tests deliberately exercise process-only health without a migrated DB.
+    # Queue integration tests opt into the real lifecycle on migrated temporary files.
+    return create_app(settings, start_workers=False)
 
 
 @pytest.fixture

@@ -45,7 +45,7 @@ def test_fresh_migration_and_metadata_parity(db_engine: Engine) -> None:
     with db_engine.connect() as connection:
         assert (
             connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-            == "0001_v1"
+            == "0002_queue"
         )
         context = MigrationContext.configure(connection, opts={"compare_type": True})
         assert compare_metadata(context, Base.metadata) == []
@@ -136,3 +136,35 @@ def test_offline_migration_does_not_create_database(
     assert "CREATE TABLE videos" in result.stdout
     assert "0001_v1" in result.stdout
     assert not (tmp_path / "test.db").exists()
+
+
+def test_queue_upgrade_from_0001_preserves_jobs_and_downgrade_reupgrade(
+    settings: Settings, alembic_config: Config
+) -> None:
+    engine = create_database_engine(settings)
+    try:
+        with engine.begin() as connection:
+            alembic_config.attributes["connection"] = connection
+            command.upgrade(alembic_config, "0001_v1")
+            connection.exec_driver_sql(
+                "INSERT INTO jobs (id, type, status, payload_json, progress_percent, "
+                "attempt_count, max_attempts, created_at) VALUES "
+                "('00000000-0000-4000-8000-000000000001', 'download', 'queued', '{}', "
+                "0, 0, 3, '2026-10-02 00:00:00')"
+            )
+        for revision in ("head", "0001_v1", "head"):
+            with engine.begin() as connection:
+                alembic_config.attributes["connection"] = connection
+                if revision == "0001_v1":
+                    command.downgrade(alembic_config, revision)
+                else:
+                    command.upgrade(alembic_config, revision)
+                assert connection.exec_driver_sql("SELECT count(*) FROM jobs").scalar_one() == 1
+                assert connection.exec_driver_sql("PRAGMA foreign_key_check").all() == []
+            columns = {column["name"] for column in inspect(engine).get_columns("jobs")}
+            assert ("cancel_requested_at" in columns) == (revision == "head")
+        with engine.connect() as connection:
+            assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []
+    finally:
+        alembic_config.attributes.pop("connection", None)
+        engine.dispose()
