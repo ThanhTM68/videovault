@@ -258,7 +258,10 @@ def test_real_local_ytdlp_merge(
             return copy.deepcopy(info)
 
     monkeypatch.setattr(ytdlp.yt_dlp, "YoutubeDL", LocalExtractor)
-    service = DownloaderService(Settings(_env_file=None, temp_storage_root=tmp_path / "temp"))
+    service = DownloaderService(
+        Settings(_env_file=None, temp_storage_root=tmp_path / "temp"),
+        {Platform.YOUTUBE: ytdlp.YtDlpAdapter()},
+    )
     events = []
     try:
         result = service.download(service.prepare_request(URL), events.append)

@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -11,6 +11,16 @@ from app.services.downloader.models import (
 )
 
 ProgressCallback = Callable[[ProgressEvent], None]
+MetadataNormalizer = Callable[[Mapping[str, object], str], NormalizedVideo]
+
+
+@dataclass(frozen=True)
+class ExtractionPolicy:
+    """Trusted internal adapter policy, never a user-provided options dictionary."""
+
+    normalize: MetadataNormalizer
+    extractor_names: tuple[str, ...]
+    block_challenges: bool = False
 
 
 @dataclass(frozen=True)

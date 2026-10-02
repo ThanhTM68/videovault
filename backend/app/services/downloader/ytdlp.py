@@ -1,8 +1,10 @@
 import logging
+import re
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 
 import yt_dlp
+from yt_dlp.extractor.tiktok import TikTokIE
 from yt_dlp.utils import (
     DownloadError,
     ExtractorError,
@@ -13,7 +15,7 @@ from yt_dlp.utils import (
 )
 
 from app.models.enums import Platform
-from app.services.downloader.base import AdapterCapabilities, ProgressCallback
+from app.services.downloader.base import AdapterCapabilities, ExtractionPolicy, ProgressCallback
 from app.services.downloader.errors import (
     AuthenticationRequiredError,
     DownloaderError,
@@ -51,6 +53,24 @@ _EXTRACTOR_ERRORS = (
 )
 
 
+class _RestrictedTikTokIE(TikTokIE):
+    """Stop the library's automatic anti-bot challenge path; never solve it."""
+
+    IE_NAME = "TikTok"
+
+    @classmethod
+    def ie_key(cls) -> str:
+        return "TikTok"
+
+    def _solve_challenge_and_set_cookies(self, webpage: str) -> tuple[str, str]:
+        raise AuthenticationRequiredError()
+
+
+def _apply_policy(extractor: yt_dlp.YoutubeDL, policy: ExtractionPolicy | None) -> None:
+    if policy is None or policy.block_challenges:
+        extractor.add_info_extractor(_RestrictedTikTokIE())
+
+
 class _QuietLogger:
     """Extractor messages may contain signed URLs, tokens and headers: discard them."""
 
@@ -81,11 +101,23 @@ def map_extractor_error(exc: Exception, *, downloading: bool = False) -> Downloa
             "authentication",
             "members-only",
             "captcha",
+            "age-restricted",
+            "age restricted",
+            "age restriction",
+            "age verification",
+            "confirm your age",
+            "account required",
+            "requires an account",
+            "account restriction",
+            "challenge",
+            "not a bot",
         )
     ):
         return AuthenticationRequiredError()
     if isinstance(cause, UnsupportedError) or "unsupported url" in message:
         return UnsupportedPlatformError()
+    if isinstance(cause, PostProcessingError):
+        return DownloadFailedError()
     if isinstance(cause, (UnavailableVideoError, GeoRestrictedError)) or any(
         term in message
         for term in (
@@ -95,6 +127,9 @@ def map_extractor_error(exc: Exception, *, downloading: bool = False) -> Downloa
             "drm",
             "no video formats",
             "requested format is not available",
+            "does not exist",
+            "deleted",
+            "video not found",
         )
     ):
         return DownloadUnavailableError()
@@ -103,8 +138,8 @@ def map_extractor_error(exc: Exception, *, downloading: bool = False) -> Downloa
     return MetadataResolveError()
 
 
-def _options() -> dict[str, object]:
-    return {
+def _options(policy: ExtractionPolicy | None = None) -> dict[str, object]:
+    options: dict[str, object] = {
         "quiet": True,
         "noprogress": True,
         "no_warnings": True,
@@ -122,6 +157,11 @@ def _options() -> dict[str, object]:
         "usenetrc": False,
         "overwrites": False,
     }
+    if policy is not None:
+        options["allowed_extractors"] = [
+            f"^{re.escape(name.lower())}$" for name in policy.extractor_names
+        ]
+    return options
 
 
 class YtDlpAdapter:
@@ -129,18 +169,24 @@ class YtDlpAdapter:
 
     capabilities = AdapterCapabilities()
 
-    def resolve(self, url: str) -> NormalizedVideo:
+    def resolve(self, url: str, *, policy: ExtractionPolicy | None = None) -> NormalizedVideo:
         url = validate_video_url(url)
         platform = detect_platform(url)
         if not isinstance(platform, Platform):
             raise UnsupportedPlatformError()
         logger.info("Resolving video metadata (%s)", platform.value)
         try:
-            with yt_dlp.YoutubeDL(_options()) as extractor:
+            with yt_dlp.YoutubeDL(_options(policy)) as extractor:
+                _apply_policy(extractor, policy)
                 info = extractor.extract_info(url, download=False)
             if not isinstance(info, Mapping):
                 raise MetadataResolveError()
-            return normalize_metadata(info, platform, url)
+            check_single_video(info)
+            return (
+                policy.normalize(info, url)
+                if policy is not None
+                else normalize_metadata(info, platform, url)
+            )
         except _EXTRACTOR_ERRORS as exc:
             raise map_extractor_error(exc) from None
 
@@ -153,6 +199,8 @@ class YtDlpAdapter:
         request: DownloadRequest,
         output_stem: Path,
         progress: ProgressCallback,
+        *,
+        policy: ExtractionPolicy | None = None,
     ) -> Path:
         if detect_platform(request.url) != video.platform:
             raise UnsupportedPlatformError()
@@ -219,7 +267,7 @@ class YtDlpAdapter:
                 logger.info("Processing downloaded streams")
                 reporter(ProgressEvent(phase=ProgressPhase.PROCESSING))
 
-        options = _options()
+        options = _options(policy)
         options.update(
             {
                 "format": select,
@@ -237,11 +285,19 @@ class YtDlpAdapter:
         logger.info("Starting temporary download (%s)", video.platform.value)
         try:
             with yt_dlp.YoutubeDL(options) as extractor:
+                _apply_policy(extractor, policy)
                 # Inspect first so playlist/private/live results never enter download.
                 info = extractor.extract_info(request.url, download=False)
                 if not isinstance(info, Mapping):
                     raise DownloadUnavailableError()
                 check_single_video(info)
+                if policy is not None:
+                    refreshed = policy.normalize(info, request.url)
+                    if (
+                        refreshed.platform != video.platform
+                        or refreshed.platform_video_id != video.platform_video_id
+                    ):
+                        raise DownloadUnavailableError()
                 if str(info.get("id")) != video.platform_video_id:
                     raise DownloadUnavailableError()
                 result = extractor.process_ie_result(info, download=True)

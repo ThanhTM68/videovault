@@ -8,7 +8,7 @@
 - Prefer library APIs or subprocess argv arrays.
 - Live extractor behavior is not deterministic enough for CI.
 
-## Phase 03 service boundary
+## Service boundary (Phases 03–04)
 
 `DownloaderService` classifies the URL, selects an injected adapter, resolves metadata,
 prepares a validated `DownloadRequest`, executes it in an isolated workspace, and probes
@@ -16,8 +16,9 @@ the output. It is synchronous: Phase 05 must execute blocking work outside API h
 There is no resolve/download API endpoint, DB write, history inference, or background job.
 
 `DownloaderAdapter` exposes `resolve`, `get_formats`, `download`, and frozen capability
-metadata. `YtDlpAdapter` is a generic single-video implementation, not five complete
-platform adapters. All yt-dlp imports and options stay in `services/downloader/ytdlp.py`.
+metadata. Phase 04 defaults to five concrete adapters through `AdapterRegistry`.
+`YtDlpAdapter` remains the shared single-video core; all yt-dlp imports and options stay
+in `services/downloader/ytdlp.py`. Explicit injected adapter mappings remain supported.
 Each operation creates its own YoutubeDL instance; no mutable extractor is shared.
 
 Detection uses the existing `Platform` enum for recognized HTTP(S) hosts, plus the
@@ -26,6 +27,71 @@ matching distinguishes `youtube.com` from `youtube.com.evil.example`. Classifica
 uses no network requests. Credentials, malformed hosts, local paths, nonstandard ports,
 control characters, whitespace, and non-HTTP(S) schemes are rejected. Host recognition
 does not certify every URL type or extractor on a platform.
+
+## Platform adapters (Phase 04)
+
+Each adapter adds `can_handle` and platform-specific URL, canonical page, creator and
+extractor policies while implementing the existing resolve/get_formats/download contract.
+The registry is the only selection owner. The service exposes `capabilities()` internally,
+returning a fresh mapping of Platform to immutable AdapterCapabilities; no HTTP route is added.
+
+| Adapter | Supported individual URL forms | Extraction policy |
+|---|---|---|
+| YoutubeAdapter | `watch?v=ID`, `youtu.be/ID`, `shorts/ID` | YouTube video extractor only; Shorts remain Platform.YOUTUBE |
+| TikTokAdapter | `@user/video/ID`, `share/video/ID`, `vm.tiktok.com/TOKEN`, `vt.tiktok.com/TOKEN`, `www.tiktok.com/t/TOKEN` | Native TikTok/video redirect extractors; challenge solving blocked |
+| DouyinAdapter | `douyin.com/video/ID` | Separate Douyin extractor and identity |
+| InstagramAdapter | `/reel/CODE`, `/reels/CODE`, `/p/CODE`, `/tv/CODE` | Single public video only; images/carousels/multi-entry results rejected |
+| FacebookAdapter | `/reel/ID`, `/watch?v=ID`, `/video.php?v=ID`, `/PAGE/videos/ID` | Facebook video/reel extractors only |
+
+Support means implemented delegation through the configured yt-dlp extractor when the
+public source is resolvable. It does not guarantee current live-site availability. No
+live-platform check was performed for Phase 04; deterministic fixtures are the evidence.
+Douyin short links (`v.douyin.com`) and `fb.watch` remain recognized platform hosts but
+are unsupported extraction inputs: no Generic fallback or custom redirect scraper is used.
+Other native URL forms not listed above remain unsupported until deliberately added.
+
+Common mobile/root hosts are normalized to official canonical hosts where implemented.
+Adapters strip non-identity query parameters from extraction URLs, including tracking
+and playlist selection. Watch URLs containing both a video ID and playlist query resolve
+only that video. Profiles/channels/tags/search/playlist/story pages fail before extraction.
+
+An internal frozen `ExtractionPolicy` restricts loaded extractor names and supplies a
+metadata normalization callback. The wrapper first enforces its shared single-video,
+DRM/live/auth checks, then invokes platform normalization. Download refreshes and checks
+metadata again before media transfer; changed IDs, wrong extractor families, foreign
+canonical pages or multi-entry results fail. No recursive playlist/carousel unwrapping.
+
+IDs accept exact nonnegative integers or safe strings, never float conversion. Video
+identity remains `(Platform, platform_video_id)`; a TikTok ID never becomes Douyin identity.
+Resolved TikTok short links with only a video ID use the native `/share/video/ID`
+canonical form; missing creator information remains null.
+YouTube creator_id uses channel_id, not an inferred username/handle. TikTok/Douyin prefer
+display names and explicit uploader IDs; Instagram/Facebook reuse available uploader
+identity. Optional unsafe/missing creator URLs become null. Upload date is a date with
+UTC timestamp fallback; counts remain nullable/nonnegative and integer strings preserve
+precision. Missing dimensions/fps may use structured video format metadata; titles are
+never parsed for resolution. Resolution summaries may describe the highest source format
+even above 1080; the existing selection and final probe still enforce the download cap.
+
+The existing yt-dlp dependency is pinned to **2026.8.19** because the TikTok safety guard
+overrides a version-sensitive challenge hook. Both the TikTok policy and unconfigured
+generic core stop that library path with AuthenticationRequiredError. Upgrading requires
+review of the hook and running its real-extractor, mocked-webpage regression test; do not
+remove the guard merely to make a changing live site work. No new scraper/browser package,
+credential configuration, automated login, or challenge/signature solving system is added.
+
+## Network boundary
+
+Production registry selection requires exact permitted social hosts and individual URL
+shapes. Unknown domains, localhost, IP literals (including private/link-local addresses),
+non-HTTP schemes, and arbitrary platform subdomains cannot select an adapter. Extractor
+names are restricted per platform, without Generic; post-extraction canonical pages must
+match that platform and the requested identity where the URL carries it.
+
+Redirects and CDN/media requests remain owned by yt-dlp. These controls limit inputs and
+extractor families; they are not complete transport-level DNS/IP or rebinding protection.
+No generic fetch proxy, manual HTTP client, custom short-link redirect following, or
+DNS enforcement gateway is introduced. Stronger transport enforcement remains deferred.
 
 ## Normalized models
 
@@ -60,7 +126,7 @@ Every adapter exposes capabilities:
 - filter_date
 - filter_duration
 
-The core exposes only resolve_single/download_single as true. Other capabilities are
+All five adapters expose only resolve_single/download_single as true. Other capabilities are
 false; crawling/sorting/filtering remains future work. Playlists, live streams, and DRM
 results are rejected. Metadata marked private/login-only produces authentication-required.
 
@@ -154,5 +220,5 @@ executables are genuinely missing; installed tools with broken behavior fail tes
 An optional public metadata-only manual check is separate from acceptance and is not
 evidence of full site support. No live-site check was required for this phase.
 
-Deferred: real platform adapters, discovery/crawling, persistent queue/cancellation,
+Deferred: broader platform URL forms, discovery/crawling, persistent queue/cancellation,
 history/dedup, Drive, batch, editor, similarity, codec conversion, and unknown-height policy.
