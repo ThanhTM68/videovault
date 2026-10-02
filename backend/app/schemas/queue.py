@@ -42,3 +42,7 @@ class SubmittedJob(DomainModel):
 
 class SubmissionResult(DomainModel):
     jobs: list[SubmittedJob]
+
+
+class QueueState(DomainModel):
+    paused: bool

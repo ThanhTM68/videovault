@@ -63,4 +63,6 @@ def test_no_test_routes_in_default_application(settings: Settings) -> None:
         "/api/v1/jobs/{job_id}/retry",
         "/api/v1/queue/pause",
         "/api/v1/queue/resume",
+        "/api/v1/queue",
+        "/api/v1/videos/resolve",
     }

@@ -55,6 +55,7 @@ In the first terminal, from the repository root:
 
 ```powershell
 Set-Location backend
+..\.venv\Scripts\python.exe -m alembic upgrade head
 ..\.venv\Scripts\python.exe -m app.main
 ```
 
@@ -109,8 +110,30 @@ Phases 03–04 add the internal download engine and five platform adapters, isol
 integration, capped format selection, temporary downloads, and ffprobe validation.
 Phase 05 adds durable download submission, polling, cancellation, retry and pause/resume
 APIs with a SQLite queue and in-process workers. Outputs remain temporary; history,
-dedup and storage/library integration are deferred. The current frontend is unchanged.
-The next planned phase is **Phase 06 — Frontend Shell, Quick Download & Queue**.
+dedup and storage/library integration are deferred.
+Phase 06 adds Dashboard, Quick Download and Queue, with typed API calls, optional
+single-video metadata preview, job progress/actions and authoritative pause state.
+The next planned phase is **Phase 07 — Library, History & Dedup**.
+
+### Frontend workflow
+
+Open Quick Download, paste 1–100 URLs (one per line), choose a maximum height
+(1080p by default), container and audio setting, then create jobs. Blank lines and
+identical repeated lines are removed within the paste; this does not check history.
+Preview is optional and available for one URL. Missing metadata/thumbnail is normal.
+Storage and force controls are deferred; successful outputs remain temporary.
+
+Queue shows paginated jobs, status filters, progress, timestamps and safe errors.
+Cancel queued/running jobs; running cancellation waits for worker acknowledgement.
+Retry failed jobs only while attempts remain. Pause stops new claims and leaves
+active jobs running; reload reads the backend flag, while backend restart resets it.
+Dashboard shows global job counts and five recent jobs, not library/history counts.
+
+Dashboard and Queue share one polling owner: two seconds with queued/active work,
+ten seconds when idle or unavailable. Global counts refresh every ten seconds and
+after actions/manual refresh; separate queries may briefly reflect different moments.
+Navigation stops polling. Failed reads preserve loaded data and offer Refresh.
+The connection indicator offers a health retry when the backend is unavailable.
 
 ### Backend foundation configuration
 

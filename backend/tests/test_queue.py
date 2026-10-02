@@ -458,7 +458,11 @@ def test_failure_isolation_and_sanitized_error(
             wait_status(queue, jobs[1].id, S.COMPLETED)
             assert failed.error.code == "INTERNAL_SERVER_ERROR"
             assert "secret-token" not in failed.model_dump_json() + caplog.text
-            assert not adapter.paths[0].parent.exists()
+            # Equal submission timestamps are ordered by UUID, not input position.
+            failed_path = next(path for path in adapter.paths if "-bad_" in path.name)
+            successful_path = next(path for path in adapter.paths if "-good_" in path.name)
+            assert not failed_path.parent.exists()
+            assert successful_path.parent.exists()
         finally:
             assert manager.stop()
 
