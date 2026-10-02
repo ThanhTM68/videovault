@@ -35,6 +35,18 @@ Adapters/providers do not depend on FastAPI route objects.
 
 Avoid circular imports.
 
+## Persistence foundation (Phase 02)
+
+The application factory owns a lazy SQLite engine and session factory; shutdown
+disposes the engine. `app.db.session.get_session` is the request-scoped dependency
+and rolls back and closes uncommitted work. No shared mutable Session or automatic
+request commit exists. Services own transactions; repositories use SQLAlchemy 2
+selects and flush writes without committing. Repositories never touch physical files.
+
+Alembic owns schema changes; application startup does not create tables. Models
+import independently of FastAPI startup. All DB tests migrate temporary SQLite files.
+See `docs/database.md` for timestamp, identity, enum, history, and deletion policies.
+
 ## Downloader boundary
 
 Interface concept:

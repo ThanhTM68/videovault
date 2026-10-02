@@ -9,7 +9,6 @@ from app.api.dependencies import get_settings
 from app.application import create_app
 from app.core.config import Settings
 from app.core.logging import configure_logging
-from app.db.session import get_session
 
 
 def test_settings_are_scoped_to_application(settings: Settings) -> None:
@@ -51,11 +50,6 @@ def test_logging_level_and_idempotence(environment: str, level: int) -> None:
     assert logger.level == level
     assert len(logger.handlers) == handler_count
     assert logger.handlers[0].formatter is not None
-
-
-def test_db_placeholder_fails_explicitly() -> None:
-    with pytest.raises(NotImplementedError, match="Phase 02"):
-        get_session()
 
 
 def test_no_test_routes_in_default_application(settings: Settings) -> None:

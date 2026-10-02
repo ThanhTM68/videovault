@@ -2,6 +2,98 @@
 
 SQLite V1 with SQLAlchemy 2 + Alembic.
 
+## Phase 02 persistence conventions
+
+Entity primary keys are UUID4 strings of length 36, generated on insert. Association
+tables use composite primary keys. ORM insert defaults supply IDs, timestamps,
+empty JSON objects, and initial queued status; raw SQL callers must provide required
+values themselves. Engagement counts and file sizes use BigInteger. Unknown duration,
+dimensions, counts, creator, and upload date remain nullable. Upload dates use SQL DATE.
+
+All application timestamps must be timezone-aware. `UTCDateTime` normalizes input
+to UTC, stores naive UTC in SQLite, and returns aware UTC on load. Naive input is
+rejected. Creator `updated_at` changes on ORM updates. Raw SQL writers must obey
+the same UTC policy and supply update timestamps explicitly.
+
+String-backed Python enums persist their lowercase values in VARCHAR columns with
+named CHECK constraints. SQLAlchemy also validates strings on writes. Platform values
+are `youtube`, `tiktok`, `douyin`, `instagram`, and `facebook`; storage providers are
+`local` and `google_drive`. Job and download status values are `queued`, `resolving`,
+`downloading`, `processing`, `uploading`, `completed`, `failed`, `cancelled`, and
+`skipped_duplicate`. Media kinds are `original`, `edited`, `thumbnail`, and `audio`.
+This defines storage representation only, not a status transition/worker system.
+
+`metadata_json` and `payload_json` store variable metadata only. Top-level dictionary
+changes are tracked; replace a nested structure or the whole dictionary when changing
+nested values. Core searchable values stay in ordinary columns.
+
+### Engine, paths, and transactions
+
+`DATABASE_URL` is resolved centrally by the DB layer. The default relative SQLite
+path always means repository-root `data/videovault.db`, even from `backend/` or
+another cwd. Absolute Windows paths work; SQLite URI filenames and URL query options
+are not supported. Custom database parent directories must already exist.
+
+Every connection enables `PRAGMA foreign_keys=ON`. Python 3.12 SQLite uses explicit
+transaction mode (`autocommit=False`) so DDL and reads participate consistently in
+transactions. Engines connect lazily and are disposed at application shutdown.
+In-memory configurations use StaticPool; production and tests normally use files.
+Startup and health do not migrate or create schema. Alembic is the schema authority.
+
+Request sessions close and rollback outstanding work. Sessions expire objects on
+commit to reload database-driven reference changes. Repositories flush writes but
+never commit. Services/application boundaries explicitly commit successful work and
+rollback failed work. An IntegrityError requires rollback before session reuse.
+All DB tests use temporary databases migrated with Alembic, never the development DB.
+
+### Identity and indexes
+
+`(platform, platform_video_id)` is unique and nonempty. The unique creator pair
+`(platform, platform_creator_id)` permits multiple NULL IDs, while duplicate known
+IDs within one platform fail. Tag names are unique and case-sensitive in V1.
+Association composite primary keys prevent duplicate pairs. Additional indexes cover
+foreign-key lookups and reverse association deletion; status/search indexes are deferred.
+
+### Deletion policy
+
+| Deleted entity | Database behavior |
+|---|---|
+| Creator | Set related video `creator_id` to NULL; retain videos |
+| Job | Set download `job_id` to NULL; retain history |
+| Download event | Set media `download_id` to NULL; retain media/video |
+| Video with downloads or media | RESTRICT deletion |
+| Video without downloads/media | Delete its collection/tag associations |
+| Collection or tag | Delete association rows only |
+| Association | Retain both entities |
+| Media record | Retain video/history; never touch physical storage |
+| Storage account | Retain media; no account ownership FK exists in this shell |
+
+Database FK rules own these actions. Parent ORM relationships use
+`passive_deletes="all"` and no entity delete cascades, including when children are
+loaded. Related objects reload on access after commit; explicitly refresh/expire them
+to observe database actions before commit. A media record's video and optional download are
+separate FKs; future services must ensure they describe the same video when linking.
+
+### History and storage configuration
+
+Successful history means status `completed`, independent of media presence or soft
+deletion. Forced downloads are additional events. Removing history preserves files,
+and a skipped duplicate is not a successful download event.
+
+Storage-account `config_json` is a non-secret shell. ORM writes accept only flat string
+values for `root_path` and `root_folder_id`, including tracked dictionary updates.
+Unknown keys, tokens, credentials, and nested values are rejected. This is application
+write validation, not credential scanning or an encryption store; direct SQL must obey
+the same policy. Provider account IDs are metadata, not OAuth credentials.
+
+### Migrations
+
+Initial revision: `0001_v1`. Revisions contain fixed SQL types/DDL, not calls to current
+model `create_all`. Metadata imports do not start the FastAPI application. Alembic
+supports SQLite batch migrations for future table alterations. Upgrade/downgrade/upgrade
+and metadata parity are tested on temporary databases; downgrade drops V1 records and
+must not be used on a populated database without a backup and explicit intent.
+
 ## Core tables
 
 ### creators

@@ -58,6 +58,8 @@ def test_development_defaults() -> None:
         ("APP_HOST", "invalid..host"),
         ("DATABASE_URL", "postgresql://private:secret@example/db"),
         ("DATABASE_URL", "sqlite:///"),
+        ("DATABASE_URL", "sqlite:///file:test.db"),
+        ("DATABASE_URL", "sqlite:///test.db?uri=true"),
         ("DOWNLOAD_MAX_HEIGHT", "0"),
         ("DOWNLOAD_MAX_HEIGHT", "1081"),
         ("DOWNLOAD_CONCURRENCY", "0"),

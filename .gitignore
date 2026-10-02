@@ -12,7 +12,14 @@ coverage/
 *.log
 *.sqlite
 *.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
 *.db
+*.db-journal
 *.db-shm
 *.db-wal
 *.egg-info/
