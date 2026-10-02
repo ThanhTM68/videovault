@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from sqlalchemy import Engine, select
 from sqlalchemy.exc import IntegrityError
@@ -35,9 +37,17 @@ def test_download_repository_history_and_crud(db_session: Session) -> None:
     video = VideoRepository(db_session).add(make_video())
     other = VideoRepository(db_session).add(make_video("other"))
     repository = DownloadRepository(db_session)
-    first = repository.add(Download(video_id=video.id, status=DownloadStatus.COMPLETED))
+    created = datetime(2026, 1, 1, tzinfo=UTC)
+    first = repository.add(
+        Download(video_id=video.id, status=DownloadStatus.COMPLETED, created_at=created)
+    )
     forced = repository.add(
-        Download(video_id=video.id, status=DownloadStatus.COMPLETED, forced=True)
+        Download(
+            video_id=video.id,
+            status=DownloadStatus.COMPLETED,
+            forced=True,
+            created_at=created + timedelta(seconds=1),
+        )
     )
     failed = repository.add(Download(video_id=video.id, status=DownloadStatus.FAILED))
     repository.add(Download(video_id=video.id, status=DownloadStatus.SKIPPED_DUPLICATE))

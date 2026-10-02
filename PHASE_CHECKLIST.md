@@ -2,12 +2,12 @@
 
 ## V1
 
-- [ ] Phase 00 Bootstrap
-- [ ] Phase 01 Backend foundation
-- [ ] Phase 02 Database
-- [ ] Phase 03 Download engine
-- [ ] Phase 04 Platform adapters
-- [ ] Phase 05 Queue/worker
+- [x] Phase 00 Bootstrap
+- [x] Phase 01 Backend foundation
+- [x] Phase 02 Database
+- [x] Phase 03 Download engine
+- [x] Phase 04 Platform adapters
+- [x] Phase 05 Queue/worker
 - [ ] Phase 06 Frontend
 - [ ] Phase 07 Library/history/dedup
 - [ ] Phase 08 Storage/Drive

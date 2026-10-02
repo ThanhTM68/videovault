@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from app.api.dependencies import get_settings
 from app.core.config import Settings
 from app.models.enums import JobStatus
-from app.schemas.queue import DownloadSubmission, SubmissionResult, SubmittedJob
+from app.schemas.queue import DownloadSubmission, QueueState, SubmissionResult, SubmittedJob
 from app.services.queue.models import JobPage, JobView
 from app.workers.manager import WorkerManager
 
@@ -17,6 +17,11 @@ def get_manager(request: Request) -> WorkerManager:
 
 
 Manager = Annotated[WorkerManager, Depends(get_manager)]
+
+
+@router.get("/queue", response_model=QueueState)
+def queue_state(manager: Manager) -> QueueState:
+    return QueueState(paused=manager.paused)
 
 
 @router.post("/downloads", response_model=SubmissionResult, status_code=202)

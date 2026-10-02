@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { fetchHealth } from '../api/health'
+import { ApiError } from '../api/client'
 
 export const useHealthStore = defineStore('health', () => {
   const status = ref<'idle' | 'checking' | 'reachable' | 'unreachable'>('idle')
@@ -16,5 +17,14 @@ export const useHealthStore = defineStore('health', () => {
     }
   }
 
-  return { status, check }
+  function observe(failure?: unknown): void {
+    status.value =
+      failure instanceof ApiError &&
+      (failure.status === null ||
+        failure.code === 'HTTP_ERROR' ||
+        failure.code === 'INVALID_RESPONSE')
+        ? 'unreachable'
+        : 'reachable'
+  }
+  return { status, check, observe }
 })

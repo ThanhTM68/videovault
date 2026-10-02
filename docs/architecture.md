@@ -152,6 +152,29 @@ Shutdown stops claims, signals cancellation, and uses a five-second thread join 
 keeps the supervisor/engine until it exits; forced termination relies on restart recovery.
 Completed output remains temporary, without video/history/media/storage writes.
 
+## Phase 06 frontend boundaries
+
+App owns navigation and the existing health indicator; Router selects Dashboard,
+Quick Download or Queue. Views own presentation/form input, reusable JobCard and
+StatusBadge render backend states, and typed API modules own transport validation.
+Download Pinia state handles submission and optional explicit single-video preview.
+Queue Pinia state handles paginated jobs, global counts, actions and runtime pause.
+No downloader/platform rules, persistence or filesystem access live in components.
+
+Dashboard/Queue each mount the same polling composable, with one shared-store owner.
+It waits for each cycle before scheduling the next, aborts reads on unmount, fences
+stale responses and preserves cached data on failure. Cadence is 2 seconds with
+queued/active jobs and 10 seconds idle/error. Filtered totals supply global counts
+every 10 seconds; separate reads are not an atomic snapshot. Latest jobs come from
+the final backend page(s), while Queue retains the server's oldest-first ordering.
+
+Mutations use returned server state, per-job busy guards and conflict refreshes.
+Pause is read via GET /queue; cancel_requested_at is an in-progress cancellation,
+not terminal status. Unknown/reset progress (null or zero) is indeterminate.
+POST /videos/resolve delegates through PreviewService to the existing downloader
+resolver and projects public metadata only, with no media download or DB writes.
+These two additive endpoints require no schema or dependency changes.
+
 ## Error categories
 
 Examples:

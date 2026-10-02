@@ -9,12 +9,16 @@ Returns HTTP 200 with `{"status":"ok"}`. This reports application-process health
 it does not check database, storage, or external media services.
 
 ## Resolve
-Planned for a later phase; not implemented by Phase 05.
+Phase 06 implements optional, single-video metadata preview.
 POST `/videos/resolve`
-Body:
-- url
+Strict JSON body: `{"url":"https://www.youtube.com/watch?v=..."}`.
+Uses existing download URL validation and identity-query sanitation. Invalid input
+returns 422; resolve failures use the existing safe domain error envelope.
 
-Returns normalized metadata and downloaded-state summary.
+Returns platform, platform_video_id, canonical_url, title, creator, duration_seconds,
+width, height and thumbnail_url; metadata fields may be null. No raw extractor data,
+filesystem paths, formats, credentials or downloaded-state summary is returned.
+The service calls the existing resolver without downloading media or writing jobs.
 
 ## Download
 Phase 05 implements submission only. POST returns 202 after an atomic durable commit.
@@ -49,7 +53,9 @@ Returns created job IDs.
 GET `/downloads/{id}`
 
 ## Jobs
-All six job/queue operations below are implemented in Phase 05. GET jobs accepts
+Phase 05 implements the job operations and pause/resume below; Phase 06 adds the
+read-only GET `/queue`, returning `{"paused":true/false}` from the running manager.
+This allows browser reload to restore authoritative pause state. GET jobs accepts
 optional status and type filters, page >=1 and page_size 1..100 (default 20). It returns
 items/page/page_size/total, ordered by created_at then id. Job views expose id/type/status,
 progress_percent, current_step, attempt_count/max_attempts, created_at/started_at/
@@ -67,6 +73,7 @@ GET `/jobs`
 GET `/jobs/{id}`
 POST `/jobs/{id}/cancel`
 POST `/jobs/{id}/retry`
+GET `/queue`
 POST `/queue/pause`
 POST `/queue/resume`
 
