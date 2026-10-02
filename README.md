@@ -24,7 +24,7 @@ Phase prompts:
 Only download/store media you are authorized to use.
 This project must not implement DRM/access-control/private-content bypasses.
 
-## Local development (Phase 00)
+## Local development
 
 Requirements: Python 3.12+, Node 22.12+ (Node 24 LTS recommended), npm, and Git.
 FFmpeg/ffprobe are needed in later media phases. Docker is not required.
@@ -103,4 +103,40 @@ will be designed in the release phase. `npm run preview` has no API proxy.
 
 Existing `data/downloads`, `data/temp`, and `data/thumbnails` directories remain
 empty foundations. Phase 00 contains no database or media features.
-The next planned phase is **Phase 01 — Backend Foundation**.
+Phase 01 adds validated settings, restricted CORS, centralized logging, and a
+stable API error envelope. The next planned phase is **Phase 02 — Database & Migrations**.
+
+### Backend foundation configuration
+
+All settings load from the root `.env`, with process environment variables taking
+precedence. Invalid settings fail during application creation; diagnostic text
+does not include submitted configuration values. `create_app(settings)` accepts
+explicit validated settings, and `app.api.dependencies.get_settings` supports
+normal FastAPI dependency overrides without a global settings cache.
+
+| Variable | Default | Validation/behavior |
+|---|---|---|
+| `APP_ENV` | `development` | `development`, `test`, or `production` |
+| `APP_HOST` | `127.0.0.1` | IP address or hostname |
+| `APP_PORT` | `8000` | 1–65535 |
+| `DATABASE_URL` | `sqlite:///./data/videovault.db` | SQLite URL with a path; unused until Phase 02 |
+| `LOCAL_STORAGE_ROOT` | `./data/downloads` | Nonempty path |
+| `TEMP_STORAGE_ROOT` | `./data/temp` | Nonempty path |
+| `THUMBNAIL_STORAGE_ROOT` | `./data/thumbnails` | Nonempty path |
+| `DOWNLOAD_MAX_HEIGHT` | `1080` | 1–1080; reserved for downloader phases |
+| `DOWNLOAD_CONCURRENCY` | `3` | Positive integer; reserved for queue phases |
+| `FRONTEND_ORIGIN` | `http://127.0.0.1:5173` | One HTTP(S) origin, no credentials/path/query/fragment |
+
+Relative storage paths resolve against the repository root; absolute paths remain
+absolute. Settings do not create directories or open a database. `STORAGE_PROVIDER`
+and Google Drive placeholders in `.env.example` remain unused.
+
+Application log level is DEBUG in development and INFO in test/production, using
+timestamp, level, module, and message. Unexpected errors log their exception class
+and stack locations without exception text, request content, or local variables.
+Public errors are defined in the API contract. CORS allows only `FRONTEND_ORIGIN`
+and does not enable credentials. Its protocol-level rejected preflight response
+is the standard middleware response rather than an application error envelope.
+
+`app/db/session.py` reserves the database dependency and raises `NotImplementedError`
+if called. No production route calls it; SQLAlchemy and Alembic are Phase 02 work.
