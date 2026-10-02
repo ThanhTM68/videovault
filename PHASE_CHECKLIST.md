@@ -8,7 +8,7 @@
 - [x] Phase 03 Download engine
 - [x] Phase 04 Platform adapters
 - [x] Phase 05 Queue/worker
-- [ ] Phase 06 Frontend
+- [x] Phase 06 Frontend
 - [ ] Phase 07 Library/history/dedup
 - [ ] Phase 08 Storage/Drive
 - [ ] Phase 09 Batch
