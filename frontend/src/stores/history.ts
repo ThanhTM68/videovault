@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { fetchHistory } from '../api/library'
 import { errorMessage } from '../api/client'
+import { useHealthStore } from './health'
 import type { HistoryItem, Platform } from '../types/library'
 
 export const useHistoryStore = defineStore('history', () => {
@@ -18,14 +19,24 @@ export const useHistoryStore = defineStore('history', () => {
     controller = current
     loading.value = true
     try {
-      const result = await fetchHistory(value, filters.value, current.signal)
+      const criteria = { ...filters.value }
+      let result = await fetchHistory(value, criteria, current.signal)
       if (current !== controller) return
+      const lastPage = Math.max(1, Math.ceil(result.total / result.page_size))
+      if (result.page > lastPage) {
+        result = await fetchHistory(lastPage, criteria, current.signal)
+        if (current !== controller) return
+      }
       items.value = result.items
       page.value = result.page
       total.value = result.total
       error.value = null
+      useHealthStore().observe()
     } catch (failure) {
-      if (!current.signal.aborted) error.value = errorMessage(failure)
+      if (!current.signal.aborted) {
+        error.value = errorMessage(failure)
+        useHealthStore().observe(failure)
+      }
     } finally {
       if (current === controller) loading.value = false
     }

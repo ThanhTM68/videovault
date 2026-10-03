@@ -48,9 +48,11 @@ export async function request<T>(
     let data: unknown
     try {
       data = await response.json()
-    } catch {
+    } catch (failure) {
+      if (signal.aborted) throw failure
       data = null
     }
+    signal.throwIfAborted()
     if (!response.ok) {
       if (
         isRecord(data) &&

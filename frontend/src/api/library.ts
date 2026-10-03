@@ -89,7 +89,10 @@ export const fetchLibrary = (
 export const fetchDetail = (id: string, signal?: AbortSignal): Promise<VideoDetail> =>
   request('/videos/' + encodeURIComponent(id), isDetail, { signal })
 export const destroyVideo = (id: string, action: DeleteOperation): Promise<VideoDetail> =>
-  request(`/videos/${encodeURIComponent(id)}/${action}`, isDetail, { method: 'DELETE' })
+  request(`/videos/${encodeURIComponent(id)}/${action}`, isDetail, {
+    method: 'DELETE',
+    timeout: 120000,
+  })
 export const refreshFiles = (id: string): Promise<VideoDetail> =>
   request(`/videos/${encodeURIComponent(id)}/refresh-files`, isDetail, {
     method: 'POST',
@@ -113,8 +116,13 @@ export const fetchHistory = (
   signal?: AbortSignal,
 ): Promise<Page<HistoryItem>> =>
   request('/history?' + query({ ...filters, page, page_size: 25 }), isPage(isHistory), { signal })
-export const fetchNamed = (kind: 'tags' | 'collections'): Promise<NamedItem[]> =>
-  request('/' + kind, (data): data is NamedItem[] => Array.isArray(data) && data.every(isNamed))
+export const fetchNamed = (
+  kind: 'tags' | 'collections',
+  signal?: AbortSignal,
+): Promise<NamedItem[]> =>
+  request('/' + kind, (data): data is NamedItem[] => Array.isArray(data) && data.every(isNamed), {
+    signal,
+  })
 export const createNamed = (kind: 'tags' | 'collections', name: string): Promise<NamedItem> =>
   request('/' + kind, isNamed, { method: 'POST', body: { name } })
 export const attachNamed = (

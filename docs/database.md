@@ -310,3 +310,12 @@ rejected, including after disconnect, since MediaFile has no account ownership F
 Existing identity uniqueness, event history, missing/deleted markers and organization
 semantics remain. Download+MediaFile+Job completion is one short transaction after
 provider success; no transaction spans Google API I/O.
+
+## Stabilization of concurrent mutations
+
+Tag/collection membership changes and Drive account/root changes reserve SQLite's
+writer before reading their transaction snapshot. A conditional, unchanged-value
+UPDATE supplies this reservation and waits under SQLite's existing finite lock
+timeout. This prevents a read-to-write upgrade from failing immediately against a
+concurrent queue claim. Ordinary reads remain reads; provider I/O stays outside
+transactions. Schema and migration head remain unchanged at 0003_library.

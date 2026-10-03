@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import BatchCandidateCard from '../components/BatchCandidateCard.vue'
 import { useBatchStore } from '../stores/batch'
-import { useStorageStore } from '../stores/storage'
+import { useStorageStatus } from '../composables/useStorageStatus'
 import type { SourceOrdering, SourceRequest } from '../types/sources'
 import type { StorageProvider } from '../types/storage'
 import { validateUrls } from '../utils/download'
 const batch = useBatchStore(),
-  storage = useStorageStore()
+  storage = useStorageStatus()
 const url = ref(''),
   n = ref<string | number>('20'),
   ordering = ref<SourceOrdering>('source')
@@ -29,7 +29,8 @@ const targetReady = computed(
     !!storage.status &&
     !storage.error &&
     !storage.loading &&
-    !!storage.status.providers.find((item) => item.provider === target.value)?.available,
+    !!storage.status.providers.find((item) => item.provider === target.value)?.available &&
+    (target.value === 'local' || storage.driveReady),
 )
 let defaultApplied = false
 watch(
@@ -54,9 +55,6 @@ watch([n, ordering, minDuration, maxDuration, minViews, maxViews, dateFrom, date
   validation.value = null
 })
 watch(force, (value) => batch.syncForce(value))
-onMounted(() => {
-  void storage.load()
-})
 onUnmounted(() => batch.invalidate(true))
 async function preview(): Promise<void> {
   validation.value = validateUrls([url.value.trim()])

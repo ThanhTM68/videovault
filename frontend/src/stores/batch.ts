@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { ApiError, errorMessage } from '../api/client'
 import * as api from '../api/sources'
+import { useHealthStore } from './health'
 import type { DownloadOptions } from '../types/api'
 import type {
   BatchResult,
@@ -46,8 +47,12 @@ export const useBatchStore = defineStore('batch', () => {
       preview.value = response
       capabilities.value = response.source.capabilities
       valid.value = true
+      useHealthStore().observe()
     } catch (failure) {
-      if (!current.signal.aborted && requestVersion === version) error.value = errorMessage(failure)
+      if (!current.signal.aborted && requestVersion === version) {
+        error.value = errorMessage(failure)
+        useHealthStore().observe(failure)
+      }
     } finally {
       if (requestVersion === version) {
         loading.value = false
@@ -92,12 +97,14 @@ export const useBatchStore = defineStore('batch', () => {
         selected_ids: [...selectedIds.value],
       })
       if (submissionVersion !== version) return
+      useHealthStore().observe()
       result.value = response
       valid.value = false
       selectedIds.value = []
     } catch (failure) {
       if (submissionVersion !== version) return
       error.value = errorMessage(failure)
+      useHealthStore().observe(failure)
       if (failure instanceof ApiError && failure.code === 'SOURCE_PREVIEW_EXPIRED') {
         valid.value = false
         selectedIds.value = []

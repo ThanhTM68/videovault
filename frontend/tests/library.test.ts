@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as api from '../src/api/library'
 import { ApiError } from '../src/api/client'
 import { useLibraryStore } from '../src/stores/library'
+import { useHistoryStore } from '../src/stores/history'
+import { useHealthStore } from '../src/stores/health'
 import LibraryView from '../src/views/LibraryView.vue'
 import HistoryView from '../src/views/HistoryView.vue'
 import type { LibraryVideo, VideoDetail, HistoryItem, Page } from '../src/types/library'
@@ -86,7 +88,7 @@ const click = async (wrapper: ReturnType<typeof mountPage>, text: string) => {
 }
 beforeEach(() => {
   setActivePinia(createPinia())
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   vi.mocked(api.fetchLibrary).mockResolvedValue(page([video]))
   vi.mocked(api.fetchHistory).mockResolvedValue(page([event]))
   vi.mocked(api.fetchDetail).mockResolvedValue(detail)
@@ -291,6 +293,81 @@ describe('Phase 07 library/history UI', () => {
     expect(useLibraryStore().selected?.has_file).toBe(true)
     expect(wrapper.find('[role="alertdialog"]').exists()).toBe(true)
     wrapper.unmount()
+  })
+  it.each(['library', 'history'] as const)(
+    'returns to a valid %s page when the final page disappears',
+    async (kind) => {
+      const read = kind === 'library' ? api.fetchLibrary : api.fetchHistory
+      if (kind === 'library')
+        vi.mocked(api.fetchLibrary)
+          .mockResolvedValueOnce({ ...page<LibraryVideo>([], 25), page: 2 })
+          .mockResolvedValueOnce(page([video], 25))
+      else
+        vi.mocked(api.fetchHistory)
+          .mockResolvedValueOnce({ ...page<HistoryItem>([], 25), page: 2 })
+          .mockResolvedValueOnce(page([event], 25))
+      const store = kind === 'library' ? useLibraryStore() : useHistoryStore()
+      await store.load(2)
+      expect(read).toHaveBeenCalledTimes(2)
+      expect(store.page).toBe(1)
+      expect(store.items).toHaveLength(1)
+      expect(store.loading).toBe(false)
+    },
+  )
+  it.each(['library', 'history'] as const)(
+    'updates backend connection health when %s fails and recovers',
+    async (kind) => {
+      const health = useHealthStore()
+      health.status = 'reachable'
+      const failure = new ApiError('Backend offline', 'NETWORK_ERROR')
+      if (kind === 'library') vi.mocked(api.fetchLibrary).mockRejectedValueOnce(failure)
+      else vi.mocked(api.fetchHistory).mockRejectedValueOnce(failure)
+      const store = kind === 'library' ? useLibraryStore() : useHistoryStore()
+      await store.load()
+      expect(health.status).toBe('unreachable')
+      await store.load()
+      expect(health.status).toBe('reachable')
+    },
+  )
+  it('reconciles truthful file markers after partial deletion while retaining the action error', async () => {
+    const store = useLibraryStore()
+    store.selected = {
+      ...detail,
+      files: [detail.files[0], { ...detail.files[0], id: 'second-file' }],
+    }
+    vi.mocked(api.destroyVideo).mockRejectedValueOnce(
+      new ApiError('One file could not be deleted', 'STORAGE_DELETE_FAILED', 400),
+    )
+    vi.mocked(api.fetchDetail).mockResolvedValueOnce({
+      ...store.selected,
+      files: [
+        { ...detail.files[0], state: 'deleted' },
+        { ...detail.files[0], id: 'second-file' },
+      ],
+    })
+    await store.action('file')
+    expect(api.fetchDetail).toHaveBeenCalledWith('v', expect.any(AbortSignal))
+    expect(store.selected?.files.map((file) => file.state)).toEqual(['deleted', 'available'])
+    expect(store.actionError).toBe('One file could not be deleted')
+    expect(store.busy).toBe(false)
+  })
+  it('does not restart Library reads after a mutation finishes on an unmounted page', async () => {
+    const store = useLibraryStore()
+    store.selected = detail
+    let finish!: (value: VideoDetail) => void
+    vi.mocked(api.destroyVideo).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const mutation = store.action('file')
+    store.stop()
+    finish({ ...detail, has_file: false })
+    await mutation
+    expect(api.fetchLibrary).not.toHaveBeenCalled()
+    expect(store.busy).toBe(false)
+    expect(store.loading).toBe(false)
   })
 })
 

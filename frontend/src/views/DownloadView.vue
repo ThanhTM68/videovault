@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useStorageStore } from '../stores/storage'
+import { computed, onUnmounted, ref, watch } from 'vue'
+import { useStorageStatus } from '../composables/useStorageStatus'
 import type { StorageProvider } from '../types/storage'
 import { useDownloadsStore } from '../stores/downloads'
 import { MAX_URLS, parseUrls, safeImageUrl, validateUrls } from '../utils/download'
 const downloads = useDownloadsStore()
-const storage = useStorageStore()
+const storage = useStorageStatus()
 const target = ref<StorageProvider>('local')
 const targetReady = computed(
   () =>
     !!storage.status &&
     !storage.error &&
     !storage.loading &&
+    !!storage.status.providers.find((item) => item.provider === target.value)?.available &&
     (target.value === 'local' || storage.driveReady),
 )
 let defaultApplied = false
@@ -25,9 +26,6 @@ watch(
   },
   { immediate: true },
 )
-onMounted(() => {
-  void storage.load()
-})
 const text = ref('')
 const maxHeight = ref<1080 | 720 | 480>(1080)
 const container = ref<'mp4' | 'mkv' | 'webm'>('mp4')
@@ -180,7 +178,7 @@ async function preview(): Promise<void> {
           <p>{{ downloads.preview.creator || 'Creator unavailable' }}</p>
           <p v-if="downloads.preview.has_download_history !== undefined" class="muted small">
             Successful history: {{ downloads.preview.has_download_history ? 'Yes' : 'No' }} · Stored
-            file (Drive last-known): {{ downloads.preview.has_file ? 'Yes' : 'No' }}
+            file: {{ downloads.preview.has_file ? 'Yes' : 'No' }}
           </p>
           <p class="muted small">
             {{

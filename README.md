@@ -106,6 +106,60 @@ for repeat installs. Python dependency bounds live in `backend/pyproject.toml`.
 The production build is a compilation check; production API serving/routing
 will be designed in the release phase. `npm run preview` has no API proxy.
 
+### Isolated offline demo before Editor
+
+The maintained development runner uses the real API, SQLite migrations, workers,
+media probing/hashing and storage providers. Platform metadata/transfers, channel
+enumeration and optional Google SDK calls are explicitly synthetic. FFmpeg creates
+real short media files. This verifies application workflows independently of live
+sites; it does not prove live YouTube or Google Drive availability.
+
+In one terminal, from the repository root:
+
+```powershell
+$demoRoot = Join-Path $env:TEMP ('videovault-demo-' + [guid]::NewGuid())
+.\.venv\Scripts\python.exe scripts/demo_stabilization.py --root $demoRoot --seed-library 30
+```
+
+Start Vite normally in a second terminal. Use these fixture links:
+
+| Workflow | Fixture URL |
+|---|---|
+| Quick Download | `https://www.youtube.com/watch?v=demo0000031` |
+| Slow transfer/cancellation | `https://www.youtube.com/watch?v=demoslow001` |
+| Fail once, then Retry | `https://www.youtube.com/watch?v=demofail001` |
+| Long title | `https://www.youtube.com/watch?v=demolong001` |
+| Batch | `https://www.youtube.com/@demo/videos` |
+
+Seeding creates files/events through the ordinary worker only for a new demo DB.
+Restart with the same `--root` to keep its records, failure-once marker and queue.
+The runner ignores normal `.env` and process settings, refuses unmarked nonempty
+directories, linked runtime paths, foreign credentials/accounts, and never resets
+or deletes data. Keep its root outside the checkout.
+
+For deterministic Drive checks add `--fake-drive`. In Storage choose Connect,
+read the `state` query value from Continue to Google, and open the local backend
+callback `/api/v1/storage/google-drive/callback?code=demo-code&state=<that-state>`.
+Do not visit Google for this fixture. Set the root to `root-folder`; generated media
+bytes persist under the demo root's `fake-drive-media`. Without `--fake-drive`,
+Drive remains unconfigured and Local works normally. No real credentials are used.
+
+To exercise a provider permission failure, create `fake-drive-fault.json` inside
+that marked root with `{"upload":403}` or `{"delete":403}`. It affects only the
+offline Google SDK double; the normal provider/worker/API still handle the failure.
+Remove that fixture file before Retry. Known SDK operations accept only 403/500;
+malformed, oversized or linked fault files fail safely. This is not a production
+configuration file or HTTP endpoint.
+
+`--source-delay 11` checks a legitimate slow preview. `--preview-ttl 20` accelerates
+only the demo cache clock to test expiry; the production TTL stays ten minutes.
+Stop with Ctrl+C, or create a file named `STOP` under this owned demo root. Remove
+only that stop file before restarting. Worker cancellation is cooperative; ordinary
+transfers stop at the next cancellation check. A blocking external call can take
+longer; persisted stale attempts recover after restart. Stop the other backend
+before using the runner's default port 8000, or choose `--port` and set Vite's
+`APP_PORT` to match. No Editor functionality is included.
+
 Phases 03–04 add the internal download engine and five platform adapters, isolated yt-dlp
 integration, capped format selection, temporary downloads, and ffprobe validation.
 Phase 05 adds durable download submission, polling, cancellation, retry and pause/resume
@@ -115,7 +169,8 @@ single-video metadata preview, job progress/actions and authoritative pause stat
 Phase 07 adds a durable local Library, download-event History, identity dedup,
 force redownload, collections, personal tags and distinct file/history deletion.
 Phase 08 adds optional Google Drive storage, backend OAuth and provider-neutral finalization.
-The next planned phase is **Phase 09 - Batch** (not implemented).
+Phase 09 adds bounded YouTube channel previews and batch job submission.
+Phase 10 (Editor) awaits user review of the [stabilization report](docs/exec-plans/stabilization-00-09.md).
 
 ### Frontend workflow
 
@@ -136,7 +191,16 @@ Dashboard and Queue share one polling owner: two seconds with queued/active work
 ten seconds when idle or unavailable. Global counts refresh every ten seconds and
 after actions/manual refresh; separate queries may briefly reflect different moments.
 Navigation stops polling. Failed reads preserve loaded data and offer Refresh.
+Each read cycle cancels its remaining requests on failure or navigation. Only the
+current view's jobs influence polling cadence; completed jobs show 100%, while an
+unpaused idle queue shows **Ready for jobs**. Library and History recover the last
+valid page if deletion changes pagination. Storage status reads are owned by the
+active Download, Batch or Storage page.
 The connection indicator offers a health retry when the backend is unavailable.
+All main pages update the indicator after requests. Library deletion and explicit
+Drive checks allow up to 120 seconds for provider I/O; metadata preview allows
+35 seconds and channel preview 130 seconds. Navigation cancels reads. Mutations
+already sent may finish on the backend; revisit/refresh the page to see its state.
 
 Library supports title/creator search, platform/file/history/tag/collection filters
 and paginated results. Details show managed file state, SHA-256 and recent download

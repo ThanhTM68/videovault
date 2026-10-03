@@ -49,8 +49,8 @@ export function fetchJobs(query: JobQuery = {}, signal?: AbortSignal): Promise<J
   )
 }
 
-export const fetchJob = (id: string): Promise<Job> =>
-  request(`/jobs/${encodeURIComponent(id)}`, isJob)
+export const fetchJob = (id: string, signal?: AbortSignal): Promise<Job> =>
+  request(`/jobs/${encodeURIComponent(id)}`, isJob, { signal })
 export const cancelJob = (id: string): Promise<Job> =>
   request(`/jobs/${encodeURIComponent(id)}/cancel`, isJob, { method: 'POST' })
 export const retryJob = (id: string): Promise<Job> =>
