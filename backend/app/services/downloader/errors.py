@@ -33,6 +33,23 @@ class AuthenticationRequiredError(DownloaderError):
     public_message = "This content requires authentication or access permission"
 
 
+class PlatformAccessBlockedError(DownloaderError):
+    code = "PLATFORM_ACCESS_BLOCKED"
+    public_message = (
+        "The platform blocked anonymous access from this environment. "
+        "The video may still be public. "
+        "Try again later or from a normal network connection."
+    )
+
+
+class ExtractorRuntimeUnavailableError(DownloaderError):
+    code = "EXTRACTOR_RUNTIME_UNAVAILABLE"
+    public_message = (
+        "YouTube extraction requires supported Node.js and the matching local EJS package. "
+        "Install the documented backend dependencies and runtime, then restart the backend."
+    )
+
+
 class DownloadFailedError(DownloaderError):
     code = "DOWNLOAD_FAILED"
     public_message = "The download or container processing failed"

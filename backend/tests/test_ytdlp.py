@@ -35,6 +35,8 @@ def mock_extractor(monkeypatch: pytest.MonkeyPatch, info: object) -> tuple[Magic
     instance.extract_info.return_value = info
     factory = MagicMock(return_value=instance)
     monkeypatch.setattr(ytdlp.yt_dlp, "YoutubeDL", factory)
+    # These tests replace extraction; runtime behavior has its own regressions.
+    monkeypatch.setattr(ytdlp, "youtube_runtime_options", lambda: {})
     return factory, instance
 
 
@@ -283,6 +285,7 @@ def test_real_local_ytdlp_merge(
             return copy.deepcopy(info)
 
     monkeypatch.setattr(ytdlp.yt_dlp, "YoutubeDL", LocalExtractor)
+    monkeypatch.setattr(ytdlp, "youtube_runtime_options", lambda: {})
     service = DownloaderService(
         Settings(_env_file=None, temp_storage_root=tmp_path / "temp"),
         {Platform.YOUTUBE: ytdlp.YtDlpAdapter()},

@@ -49,6 +49,42 @@ Copy `.env.example` only if you do not already have a `.env` file. Do not commit
 local configuration or credentials. Virtual environment activation is optional;
 these commands use its Python executable directly to avoid PowerShell policy issues.
 
+### YouTube JavaScript support
+
+Anonymous YouTube extraction also uses Node on the **backend** PATH. The pinned
+yt-dlp 2026.8.19 release requires Node **22.0.0+**; frontend development still requires
+22.12+. Node 24 LTS is recommended. Verify from the backend's terminal:
+
+```powershell
+node --version
+where.exe node
+.\.venv\Scripts\python.exe -m pip install -e './backend[dev]'
+.\.venv\Scripts\python.exe -m pip show yt-dlp yt-dlp-ejs
+.\.venv\Scripts\python.exe -m pip check
+```
+
+The project declares `yt-dlp[default]==2026.8.19`. That release's own dependency
+metadata installs its matching **yt-dlp-ejs 0.8.0**; no separate guessed EJS pin or
+runtime script download is needed. Restart the backend after installing dependencies
+or changing PATH. The wrapper explicitly enables the discovered Node executable
+through yt-dlp's supported Python `js_runtimes` option. Missing, unsupported or broken
+Node/EJS fails lazily with `EXTRACTOR_RUNTIME_UNAVAILABLE`; startup, health, other
+platforms and flat channel preview do not require this single-video prerequisite.
+The version authority is the [pinned release runtime source](https://github.com/yt-dlp/yt-dlp/blob/2026.08.19/yt_dlp/utils/_jsruntime.py)
+and [dependency declaration](https://github.com/yt-dlp/yt-dlp/blob/2026.08.19/pyproject.toml).
+
+Quick Download and Queue display safe backend error codes/messages. Genuine private,
+member/account/age restrictions remain `AUTHENTICATION_REQUIRED`. An anonymous bot
+check is `PLATFORM_ACCESS_BLOCKED`: the content may still be public, but this environment
+cannot access it anonymously. Try later or from a normal connection; no authentication
+or bypass workflow is configured. A failed preview creates no jobs/files/history;
+failed jobs retry only when explicitly requested, up to the existing attempt limit.
+
+The 2026-10-04 public YouTube smoke still received anonymous bot blocking on two public
+Blender videos with Node/EJS correctly configured. API/UI now report the truthful
+platform error. **No successful live media download, Library file or SHA-256 is claimed.**
+See the [focused fix evidence](docs/exec-plans/fix-youtube-public-access.md).
+
 ### Start the backend
 
 In the first terminal, from the repository root:
@@ -376,9 +412,10 @@ Supported URLs are documented in `docs/downloader.md`; profile/channel/playlist 
 fail before extraction. Douyin short links and `fb.watch` are not enabled in this phase.
 
 Platform support depends on the public source being resolvable through configured yt-dlp.
-No current live-site compatibility was verified. Login, private, age/account restrictions,
-cookies and challenge requirements return stable errors without bypass. The existing
-yt-dlp dependency is pinned to 2026.8.19 to keep its TikTok challenge-rejection guard
+Live availability depends on the platform/network; the latest YouTube check is documented
+above. Private and age/account restrictions retain safe authentication errors; anonymous
+blocking and missing runtime support have distinct errors without bypass. The existing
+yt-dlp dependency uses its default extra pinned to 2026.8.19 to keep its TikTok challenge-rejection guard
 reviewable; upgrades require reviewing that hook and rerunning tests. No cookie/browser
 session configuration or new scraping dependencies are introduced.
 
