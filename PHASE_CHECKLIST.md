@@ -10,7 +10,7 @@
 - [x] Phase 05 Queue/worker
 - [x] Phase 06 Frontend
 - [x] Phase 07 Library/history/dedup
-- [ ] Phase 08 Storage/Drive
+- [x] Phase 08 Storage/Drive
 - [ ] Phase 09 Batch
 - [ ] Phase 10 Editor
 - [ ] Phase 11 Hardening/release

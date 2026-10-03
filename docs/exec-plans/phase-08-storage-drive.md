@@ -190,4 +190,8 @@ Final post-fix commands/results:
 - Final staged whitespace/artifact/credential review PASS; documentation updated.
 
 All verifiable implementation acceptance criteria are satisfied; final senior review
-passed. Checklist remains unchecked until the implementation commit actually exists.
+passed. Implementation committed as `6fb7255720cb664bbfa5d6d62a4ec3ae3d53841c`
+(`feat: complete phase 08 storage providers and drive`). With tests, review, docs,
+clean diff and the implementation commit verified, Phase 08 is marked complete in
+PHASE_CHECKLIST.md in the following documentation commit. Existing completed Phases
+00-07 remain checked; Phases 09-14 remain unchecked. No merge or Phase 09 branch.
