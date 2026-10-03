@@ -68,7 +68,7 @@ source enumeration keeps its capabilities and error contract.
 - [x] Clean dependency install + pip check; full backend/frontend/quality PASS.
 - [x] Alembic current/check/heads remains 0003_library; no user database touched.
 - [x] Actual browser and live results reported separately and honestly.
-- [ ] Final review/docs/artifact scan PASS; commit and verified branch push exist.
+- [x] Final review/docs/artifact scan PASS; commit and verified branch push exist.
 
 ## Rollback / recovery
 
@@ -172,6 +172,12 @@ No exact user URL or general public YouTube transfer success is asserted.
 Documentation updated. Final root and independent reliability/security reviews PASS.
 Artifact/diff scan PASS:16intended UTF-8 text files, no unexpected paths, private keys,
 tokens, binary/media/database/log/credential/cache artifacts or checklist diff. Only
-explicit fake secret markers exist in tests. Implementation commit/push pending.
+explicit fake secret markers exist in tests. Implementation commit
+`97855f93e067bce8e0fc2fa2a0247a8ea24bd2fa` (`fix: restore public youtube extraction support`)
+exists and was pushed only to `fix/youtube-public-access`; fetching origin confirmed
+the full local/remote SHA matched with a clean working tree. This documentation
+follow-up records the successful gate; its final HEAD is fetched/compared again before
+the final report. All targeted fix acceptance criteria are satisfied, with the explicit
+external live-transfer limitation above.
 Phases00-09 remain[x], Phase10 and all future phases remain[ ]; targeted compatibility
 work does not change the roadmap checklist. No automatic merge.
