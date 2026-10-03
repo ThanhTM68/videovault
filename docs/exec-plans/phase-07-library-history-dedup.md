@@ -169,7 +169,13 @@ delete failure; abrupt-crash/cleanup-failure orphans; last-known SQL file filter
 page/detail-driven missing reconciliation; detail returns at most 100 files/events;
 local-only storage. Future phases remain deferred.
 
-Implementation and review are complete; checklist remains unchecked until the actual
-implementation commit exists. Commit implementation, update checklist, commit docs,
-push only phase/07-library-history-dedup and verify local/remote SHA equality. Do not
-merge main or create a Phase 08 branch.
+## Git completion (2026-10-03)
+
+Implementation and review completed and committed as
+95d654ab1b6f1a0aca8f2e7dc01bdee0a37ff123
+(`feat: complete phase 07 library history dedup`) on phase/07-library-history-dedup.
+Only afterward, Phase 07 was marked checked in PHASE_CHECKLIST.md. Earlier checked
+phases retain their committed evidence; all future phases remain unchecked. The
+checklist/evidence update is a separate documentation commit. Final publication uses
+only this phase branch and verifies local/remote SHA equality. No merge into main or
+Phase 08 branch creation is part of this phase.
