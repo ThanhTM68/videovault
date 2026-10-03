@@ -43,6 +43,7 @@ def extractor_mock(monkeypatch: pytest.MonkeyPatch, info: dict) -> tuple[MagicMo
     extractor.extract_info.side_effect = lambda *a, **k: copy.deepcopy(info)
     factory = MagicMock(return_value=extractor)
     monkeypatch.setattr(ytdlp.yt_dlp, "YoutubeDL", factory)
+    monkeypatch.setattr(ytdlp, "youtube_runtime_options", lambda: {})
     return factory, extractor
 
 

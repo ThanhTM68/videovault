@@ -23,6 +23,25 @@ filesystem paths, formats or credentials are returned. The service resolves meta
 without downloading media or creating Video/Download/Job records; it may reconcile
 missing-file markers for an existing video.
 
+YouTube failures use the same HTTP400 `{error:{code,message,details:{}}}` envelope:
+
+| Scenario | Code |
+|---|---|
+| Private/member/account/age access restriction | AUTHENTICATION_REQUIRED |
+| Platform blocks anonymous traffic or presents a bot check | PLATFORM_ACCESS_BLOCKED |
+| Missing/unsupported/broken configured Node or local EJS package | EXTRACTOR_RUNTIME_UNAVAILABLE |
+| Removed/unavailable video or usable format | DOWNLOAD_UNAVAILABLE |
+| Unsupported URL/extractor | UNSUPPORTED_PLATFORM |
+| Other metadata compatibility/network failure | METADATA_RESOLVE_FAILED |
+
+Platform blocking does not claim the video itself requires authentication. Runtime
+diagnostics direct users to documented setup and backend restart, without executable
+paths. Neither includes raw extractor text, credentials or solver configuration.
+Health remains process-only; these checks run only when using single-video YouTube.
+Successful preview shape/read-only behavior and the separate source preview contract
+are unchanged. Quick Download renders the stable code and safe message, then releases
+its busy state so users can navigate or explicitly retry preview.
+
 ## Download
 Phase 05 implements submission only. POST returns 202 after an atomic durable commit.
 Body is strict (unknown fields rejected):
@@ -66,6 +85,10 @@ items/page/page_size/total, ordered by created_at then id. Job views expose id/t
 progress_percent, current_step, attempt_count/max_attempts, created_at/started_at/
 heartbeat_at/completed_at/cancelled_at/cancel_requested_at and nullable error {code,message}.
 Payloads, user URLs, extractor diagnostics and filesystem paths are excluded.
+
+Anonymous access/setup failures become terminal failed jobs with the same stable
+code/message shown in preview. They do not fabricate completed media/history and
+receive no automatic retry. Existing explicit Retry/attempt limits remain unchanged.
 
 Cancel queued work immediately; running work records a request and remains running
 until safe stop/cleanup. Repeated active requests are idempotent; terminal cancellation

@@ -161,6 +161,7 @@ async function preview(): Promise<void> {
         <h3>Video preview</h3>
         <p v-if="downloads.previewLoading" role="status">Resolving metadata…</p>
         <p v-else-if="downloads.previewError" role="alert" class="error">
+          <strong v-if="downloads.previewErrorCode">{{ downloads.previewErrorCode }} · </strong>
           {{ downloads.previewError }}
         </p>
         <template v-else-if="downloads.preview"

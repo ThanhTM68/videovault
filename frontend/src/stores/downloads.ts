@@ -12,6 +12,7 @@ export const useDownloadsStore = defineStore('downloads', () => {
   const preview = ref<VideoPreview | null>(null)
   const previewLoading = ref(false)
   const previewError = ref<string | null>(null)
+  const previewErrorCode = ref<string | null>(null)
   let previewController: AbortController | null = null
 
   async function submit(body: DownloadSubmissionRequest): Promise<void> {
@@ -34,6 +35,7 @@ export const useDownloadsStore = defineStore('downloads', () => {
     previewController = null
     preview.value = null
     previewError.value = null
+    previewErrorCode.value = null
     previewLoading.value = false
   }
   async function loadPreview(url: string): Promise<void> {
@@ -53,6 +55,7 @@ export const useDownloadsStore = defineStore('downloads', () => {
         !(failure instanceof ApiError && failure.code === 'ABORTED')
       ) {
         previewError.value = errorMessage(failure)
+        previewErrorCode.value = failure instanceof ApiError ? failure.code : null
         useHealthStore().observe(failure)
       }
     } finally {
@@ -66,6 +69,7 @@ export const useDownloadsStore = defineStore('downloads', () => {
     preview,
     previewLoading,
     previewError,
+    previewErrorCode,
     submit,
     loadPreview,
     clearPreview,

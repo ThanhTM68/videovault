@@ -21,7 +21,9 @@ from app.services.downloader.errors import (
     DownloaderError,
     DownloadFailedError,
     DownloadUnavailableError,
+    ExtractorRuntimeUnavailableError,
     MetadataResolveError,
+    PlatformAccessBlockedError,
     UnsupportedPlatformError,
 )
 from app.services.downloader.metadata import (
@@ -40,6 +42,7 @@ from app.services.downloader.models import (
 )
 from app.services.downloader.platform import detect_platform, validate_video_url
 from app.services.downloader.progress import ProgressReporter
+from app.services.downloader.runtime import youtube_runtime_options
 from app.services.downloader.selector import select_formats
 from app.services.media.probe import require_tool
 
@@ -88,19 +91,52 @@ def map_extractor_error(exc: Exception, *, downloading: bool = False) -> Downloa
     # yt-dlp often wraps structured ExtractorError in DownloadError.
     underlying = getattr(exc, "exc_info", None)
     cause = underlying[1] if isinstance(underlying, tuple) and len(underlying) > 1 else exc
-    message = f"{exc} {cause}".lower()  # Classification only; never returned or logged.
+    message = " ".join(f"{exc} {cause}".lower().replace("’", "'").split())
+    # Structured categories precede text. Text is classification-only, never logged.
+    if isinstance(cause, UnsupportedError) or "unsupported url" in message:
+        return UnsupportedPlatformError()
+    if isinstance(cause, PostProcessingError):
+        return DownloadFailedError()
+    if any(
+        term in message
+        for term in ("confirm you're not a bot", "confirm you are not a bot", "captcha")
+    ):
+        return PlatformAccessBlockedError()
     if any(
         term in message
         for term in (
-            "private",
-            "sign in",
-            "sign-in",
-            "log in",
-            "login",
-            "cookies",
-            "authentication",
+            "no supported javascript runtime",
+            "javascript runtime is not supported",
+            "no usable challenge solver",
+            "challenge solver lib script is not supported",
+            "challenge solver core script is not supported",
+        )
+    ):
+        return ExtractorRuntimeUnavailableError()
+    if any(
+        term in message
+        for term in (
+            "private video",
+            "video is private",
+            "login required",
+            "log in required",
+            "login is required",
+            "sign in required",
+            "sign-in required",
+            "authentication required",
+            "requires authentication",
+            "requires login",
+            "log in to view",
+            "login to view",
+            "sign in to view",
+            "fresh cookies are needed",
+            "do not have permission to view",
+            "log into an account that has access",
+            "only available for registered users",
             "members-only",
-            "captcha",
+            "members only",
+            "premium-only",
+            "subscriber-only",
             "age-restricted",
             "age restricted",
             "age restriction",
@@ -109,15 +145,9 @@ def map_extractor_error(exc: Exception, *, downloading: bool = False) -> Downloa
             "account required",
             "requires an account",
             "account restriction",
-            "challenge",
-            "not a bot",
         )
     ):
         return AuthenticationRequiredError()
-    if isinstance(cause, UnsupportedError) or "unsupported url" in message:
-        return UnsupportedPlatformError()
-    if isinstance(cause, PostProcessingError):
-        return DownloadFailedError()
     if isinstance(cause, (UnavailableVideoError, GeoRestrictedError)) or any(
         term in message
         for term in (
@@ -138,7 +168,9 @@ def map_extractor_error(exc: Exception, *, downloading: bool = False) -> Downloa
     return MetadataResolveError()
 
 
-def _options(policy: ExtractionPolicy | None = None) -> dict[str, object]:
+def _options(
+    policy: ExtractionPolicy | None = None, *, platform: Platform | None = None
+) -> dict[str, object]:
     options: dict[str, object] = {
         "quiet": True,
         "noprogress": True,
@@ -161,6 +193,8 @@ def _options(policy: ExtractionPolicy | None = None) -> dict[str, object]:
         options["allowed_extractors"] = [
             f"^{re.escape(name.lower())}$" for name in policy.extractor_names
         ]
+    if platform is Platform.YOUTUBE:
+        options.update(youtube_runtime_options())
     return options
 
 
@@ -176,7 +210,7 @@ class YtDlpAdapter:
             raise UnsupportedPlatformError()
         logger.info("Resolving video metadata (%s)", platform.value)
         try:
-            with yt_dlp.YoutubeDL(_options(policy)) as extractor:
+            with yt_dlp.YoutubeDL(_options(policy, platform=platform)) as extractor:
                 _apply_policy(extractor, policy)
                 info = extractor.extract_info(url, download=False)
             if not isinstance(info, Mapping):
@@ -267,7 +301,7 @@ class YtDlpAdapter:
                 logger.info("Processing downloaded streams")
                 reporter(ProgressEvent(phase=ProgressPhase.PROCESSING))
 
-        options = _options(policy)
+        options = _options(policy, platform=video.platform)
         options.update(
             {
                 "format": select,

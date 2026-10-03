@@ -67,6 +67,7 @@ def check_single_video(info: Mapping[str, object]) -> None:
         "premium_only",
         "subscriber_only",
         "needs_auth",
+        "members-only",
     }:
         raise AuthenticationRequiredError()
     if info.get("_type", "video") != "video" or "entries" in info or info.get("is_live"):

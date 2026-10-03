@@ -81,6 +81,53 @@ review of the hook and running its real-extractor, mocked-webpage regression tes
 remove the guard merely to make a changing live site work. No new scraper/browser package,
 credential configuration, automated login, or challenge/signature solving system is added.
 
+### Anonymous YouTube runtime and access diagnostics
+
+Install `yt-dlp[default]==2026.8.19` through the declared backend dependencies. The
+exact release's `Requires-Dist` installs `yt-dlp-ejs==0.8.0`; its Node runtime minimum
+is 22.0.0. Frontend tooling separately requires 22.12+. The wrapper discovers Node
+with `shutil.which("node")`, checks its version with an argument array, `shell=False`
+and a five-second timeout, then verifies yt-dlp's actually loaded local EJS package,
+version and scripts. Third-party imports are inside the safe lazy failure boundary,
+including a partially installed EJS package. Restart after changing dependencies/PATH.
+
+Only single-video YouTube resolve/download adds the official Python API options
+`js_runtimes={"node": {"path": discovered_node}}` and `remote_components=[]`.
+Each invocation still creates a fresh YoutubeDL with the existing YouTube-only
+allowlist. Other platform policies and flat YoutubeTab enumeration remain unchanged.
+Health/application construction performs no runtime probe or YouTube I/O. There is
+no CLI configuration, runtime solver fetching, custom JS solver, cookie/login or proxy
+configuration. The pinned TikTok challenge rejection is unchanged.
+
+Structured restriction metadata stays authoritative. Error classification prioritizes
+structured Unsupported/PostProcessing failures and specific bot/runtime phrases over
+ambiguous text. Generic words such as sign-in/cookies/challenge alone cannot prove
+that content requires access. Exact upstream private/member/account/age phrases still
+produce auth errors, including TikTok private posts and Instagram registered followers.
+
+| Failure | Safe code |
+|---|---|
+| Private/premium/subscriber/needs_auth/members-only metadata | AUTHENTICATION_REQUIRED |
+| Anonymous bot-check/CAPTCHA response | PLATFORM_ACCESS_BLOCKED |
+| Missing, unsupported or broken Node/local EJS | EXTRACTOR_RUNTIME_UNAVAILABLE |
+| Removed/unavailable public format | DOWNLOAD_UNAVAILABLE |
+| Unsupported URL/extractor | UNSUPPORTED_PLATFORM |
+| Other compatibility/network metadata failure | METADATA_RESOLVE_FAILED |
+
+These errors retain the existing safe HTTP400 envelope and terminal failed Job behavior;
+no paths or raw extractor text is returned/logged. Transport/extractor retries remain
+bounded at one, with no service retry loop or automatic worker retry. A pre-resolution
+failure creates no media/download event; a failure after an attempt began retains an
+actual failed History event, without successful history/file flags.
+
+The 2026-10-04 isolated live check used two public Blender videos, since no
+VIDEOVAULT_LIVE_TEST_URL was set. Before fixing, the actual API and standalone yt-dlp
+classified bot blocking as auth. With local EJS and explicit supported Node, both
+public videos still returned a bot block. Correct classification/runtime and actual
+UI/worker failure behavior pass; successful live media/Library/History/hash verification
+is blocked before transfer. This does not establish universal live compatibility.
+Full evidence is in `docs/exec-plans/fix-youtube-public-access.md`.
+
 ## Network boundary
 
 Production registry selection requires exact permitted social hosts and individual URL
@@ -274,6 +321,7 @@ or access-control/DRM bypass is configured.
 
 Fixed public messages/codes extend AppError: UnsupportedPlatformError, InvalidVideoUrlError,
 MetadataResolveError, DownloadUnavailableError, AuthenticationRequiredError,
+PlatformAccessBlockedError, ExtractorRuntimeUnavailableError,
 DownloadFailedError, InvalidOutputDirectoryError, MediaValidationError, and
 MissingMediaToolError. Existing API error handling would serialize them as domain errors
 (HTTP 400); Phase 03 adds no public endpoint or status-code contract.
