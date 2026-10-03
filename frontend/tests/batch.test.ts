@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import BatchView from '../src/views/BatchView.vue'
 import { useBatchStore } from '../src/stores/batch'
+import { useHealthStore } from '../src/stores/health'
 import * as api from '../src/api/sources'
 import { ApiError } from '../src/api/client'
 import type { SourcePreview, BatchResult } from '../src/types/sources'
@@ -305,5 +306,15 @@ describe('Batch lifecycle', () => {
     await pending
     expect(store.result).toBeNull()
     expect(store.preview).toBeNull()
+  })
+  it('updates backend connection health on Batch failure and recovery', async () => {
+    const health = useHealthStore()
+    health.status = 'reachable'
+    const store = useBatchStore()
+    vi.mocked(api.resolveSource).mockRejectedValueOnce(new ApiError('Offline', 'NETWORK_ERROR'))
+    await store.load(criteria)
+    expect(health.status).toBe('unreachable')
+    await store.load(criteria)
+    expect(health.status).toBe('reachable')
   })
 })

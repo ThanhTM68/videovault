@@ -207,7 +207,7 @@ class LibraryService:
         self, kind: str, item_id: str, video_id: str, *, remove: bool = False
     ) -> VideoDetail:
         with self.sessions.begin() as session:
-            if LibraryRepository(session).get_by_id(video_id) is None:
+            if not LibraryRepository(session).reserve_video(video_id):
                 raise NotFoundError("Video was not found")
             if not OrganizationRepository(session).attach(kind, item_id, video_id, remove=remove):
                 raise NotFoundError("Organization item was not found")

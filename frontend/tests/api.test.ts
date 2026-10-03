@@ -23,20 +23,18 @@ describe('typed API boundary', () => {
   it('preserves safe API code/message without displaying validation inputs', async () => {
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(
-            JSON.stringify({
-              error: {
-                code: 'VALIDATION_ERROR',
-                message: 'Request validation failed',
-                details: { input: 'secret' },
-              },
-            }),
-            { status: 422 },
-          ),
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'Request validation failed',
+              details: { input: 'secret' },
+            },
+          }),
+          { status: 422 },
         ),
+      ),
     )
     await expect(request('/example', valid)).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
@@ -76,6 +74,24 @@ describe('typed API boundary', () => {
     await expect(request('/example', valid, { signal: controller.signal })).rejects.toMatchObject({
       code: 'ABORTED',
     })
+  })
+  it.each(['cancel', 'timeout'])('preserves %s while reading the response body', async (kind) => {
+    const controller = new AbortController()
+    if (kind === 'timeout') vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => {
+          controller.abort()
+          throw new DOMException('body interrupted', 'AbortError')
+        },
+      }),
+    )
+    await expect(
+      request('/example', valid, kind === 'cancel' ? { signal: controller.signal } : {}),
+    ).rejects.toMatchObject({ code: kind === 'cancel' ? 'ABORTED' : 'REQUEST_TIMEOUT' })
   })
   it('validates job responses and query parameters', async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(jobPage([job()]))))

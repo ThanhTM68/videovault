@@ -16,7 +16,8 @@ export const isStorage = (data: unknown): data is StorageStatus =>
         nullableString(item[key]),
       ),
   )
-export const fetchStorage = (): Promise<StorageStatus> => request('/storage', isStorage)
+export const fetchStorage = (signal?: AbortSignal): Promise<StorageStatus> =>
+  request('/storage', isStorage, { signal })
 export const disconnectDrive = (): Promise<StorageStatus> =>
   request('/storage/google-drive/disconnect', isStorage, {
     method: 'POST',

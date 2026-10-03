@@ -27,6 +27,18 @@ from app.services.storage.contracts import StoredObject
 
 
 class LibraryRepository(VideoRepository):
+    def reserve_video(self, video_id: str) -> bool:
+        """Own the SQLite writer before reading a membership mutation's snapshot."""
+        return (
+            self.session.scalar(
+                update(Video)
+                .where(Video.id == video_id)
+                .values(canonical_url=Video.canonical_url)
+                .returning(Video.id)
+            )
+            is not None
+        )
+
     def identity_states(
         self, platform: Platform, identities: list[str]
     ) -> dict[str, tuple[bool, bool]]:

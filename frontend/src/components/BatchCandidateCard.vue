@@ -47,8 +47,8 @@ const image = computed(() => (failed.value ? null : safeImageUrl(props.candidate
       }}
     </p>
     <p class="small">
-      Successful history: {{ candidate.has_download_history ? 'Yes' : 'No' }} · Stored file (Drive
-      last-known): {{ candidate.has_file ? 'Yes' : 'No' }}
+      Successful history: {{ candidate.has_download_history ? 'Yes' : 'No' }} · Stored file
+      (last-known): {{ candidate.has_file ? 'Yes' : 'No' }}
     </p>
   </article>
 </template>

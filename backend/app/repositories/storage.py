@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.models import StorageAccount
@@ -23,6 +23,7 @@ class StorageAccountRepository:
         return rows[0] if rows else None
 
     def bind(self, identity: str, name: str) -> StorageAccount:
+        self._reserve_drive()
         row = self.get_drive()
         if row and row.provider_account_id not in {None, identity}:
             raise StorageError("STORAGE_ACCOUNT_MISMATCH")
@@ -35,7 +36,17 @@ class StorageAccountRepository:
         return row
 
     def root(self, folder_id: str) -> None:
+        self._reserve_drive()
         row = self.get_drive()
         if row is None:
             raise StorageError("STORAGE_NOT_CONNECTED")
         row.config_json = {**row.config_json, "root_folder_id": folder_id}
+
+    def _reserve_drive(self) -> None:
+        # Even an empty UPDATE reserves SQLite's writer. A SELECT first could
+        # deadlock its later write upgrade against a worker claiming a job.
+        self.session.execute(
+            update(StorageAccount)
+            .where(StorageAccount.provider == StorageProvider.GOOGLE_DRIVE)
+            .values(display_name=StorageAccount.display_name)
+        )

@@ -54,8 +54,7 @@ async function add(kind: 'tags' | 'collections'): Promise<void> {
     </div>
     <p>{{ library.selected.description || 'No description available.' }}</p>
     <p class="muted">
-      Successful history: {{ library.selected.has_download_history ? 'Yes' : 'No' }} · Stored file
-      (Drive last-known):
+      Successful history: {{ library.selected.has_download_history ? 'Yes' : 'No' }} · Stored file:
       {{ library.selected.has_file ? 'Yes' : 'No' }}
     </p>
     <div class="form-actions">

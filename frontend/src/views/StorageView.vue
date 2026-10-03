@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { useStorageStore } from '../stores/storage'
-const storage = useStorageStore()
+import { useStorageStatus } from '../composables/useStorageStatus'
+const storage = useStorageStatus()
 const route = useRoute()
 const folderId = ref(''),
   disconnectConfirmed = ref(false)
@@ -10,9 +10,6 @@ async function disconnect(): Promise<void> {
   await storage.action('disconnect')
   if (!storage.error) disconnectConfirmed.value = false
 }
-onMounted(() => {
-  void storage.load()
-})
 </script>
 <template>
   <div class="page-heading">
@@ -69,7 +66,7 @@ onMounted(() => {
             ><input
               id="drive-root"
               v-model="folderId"
-              pattern="[A-Za-z0-9_-]{1,256}"
+              pattern="[A-Za-z0-9_\-]{1,256}"
               maxlength="256"
               required
             />

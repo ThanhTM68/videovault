@@ -29,7 +29,9 @@ function changeFilter(event: Event): void {
           ? 'Queue state unavailable'
           : queue.paused
             ? 'Queue paused'
-            : 'Queue running'
+            : queue.hasWork
+              ? 'Queue active'
+              : 'Ready for jobs'
       }}</span>
       <p class="muted small">
         Pause stops new jobs from starting. Currently running jobs continue.

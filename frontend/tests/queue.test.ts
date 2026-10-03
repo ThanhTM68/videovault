@@ -178,6 +178,93 @@ describe('polling ownership', () => {
     await vi.advanceTimersByTimeAsync(IDLE_POLL_MS - ACTIVE_POLL_MS)
     expect(queueApi.fetchQueueState).toHaveBeenCalledTimes(2)
   })
+  it('aborts pending sibling reads when one request fails and permits a fresh cycle', async () => {
+    let siblingSignal: AbortSignal | undefined
+    vi.mocked(jobsApi.fetchJobs).mockImplementationOnce((_query, signal) => {
+      siblingSignal = signal
+      return new Promise(() => {})
+    })
+    vi.mocked(queueApi.fetchQueueState).mockRejectedValueOnce(
+      new ApiError('Queue unavailable', 'HTTP_ERROR', 503),
+    )
+    const queue = useQueueStore()
+    await queue.refresh()
+    expect(queue.error).toBe('Queue unavailable')
+    expect(queue.loading).toBe(false)
+    expect(siblingSignal?.aborted).toBe(true)
+    await queue.refresh()
+    expect(queue.error).toBeNull()
+    expect(queue.jobs).toEqual(serverJobs)
+    expect(vi.mocked(jobsApi.fetchJobs).mock.calls[1][1]?.aborted).toBe(true)
+  })
+  it('ignores inactive route snapshots when completed work switches to idle cadence', async () => {
+    serverJobs = [job({ status: 'downloading' })]
+    const queue = useQueueStore()
+    queue.startPolling('queue')
+    await flushPromises()
+    serverJobs = [job({ status: 'completed', progress_percent: 100 })]
+    queue.startPolling('dashboard')
+    await flushPromises()
+    await queue.refresh(true)
+    expect(queue.counts?.running).toBe(0)
+    expect(queue.recentJobs[0].status).toBe('completed')
+    expect(queue.hasWork).toBe(false)
+    const reads = vi.mocked(queueApi.fetchQueueState).mock.calls.length
+    await vi.advanceTimersByTimeAsync(ACTIVE_POLL_MS)
+    expect(queueApi.fetchQueueState).toHaveBeenCalledTimes(reads)
+    await vi.advanceTimersByTimeAsync(IDLE_POLL_MS - ACTIVE_POLL_MS)
+    expect(queueApi.fetchQueueState).toHaveBeenCalledTimes(reads + 1)
+    expect(vi.getTimerCount()).toBe(1)
+  })
+  it('does not restart reads when a mutation settles after the polling page unmounts', async () => {
+    let finish!: (value: Job) => void
+    vi.mocked(jobsApi.cancelJob).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const queue = useQueueStore()
+    queue.startPolling('queue')
+    await flushPromises()
+    const mutation = queue.actOnJob(job().id, 'cancel')
+    queue.stopPolling()
+    const reads = vi.mocked(jobsApi.fetchJobs).mock.calls.length
+    finish(job({ status: 'cancelled' }))
+    await mutation
+    expect(jobsApi.fetchJobs).toHaveBeenCalledTimes(reads)
+    expect(queue.busyJobs).toEqual({})
+    expect(queue.loading).toBe(false)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+  it('does not revive polling after a conflict detail read fails following unmount', async () => {
+    vi.mocked(jobsApi.cancelJob).mockRejectedValueOnce(
+      new ApiError('Job already finished', 'CONFLICT', 409),
+    )
+    let reject!: (failure: Error) => void
+    vi.mocked(jobsApi.fetchJob).mockImplementationOnce(
+      () =>
+        new Promise((_, no) => {
+          reject = no
+        }),
+    )
+    const queue = useQueueStore()
+    queue.startPolling('queue')
+    await flushPromises()
+    const mutation = queue.actOnJob(job().id, 'cancel')
+    await flushPromises()
+    expect(jobsApi.fetchJob).toHaveBeenCalledOnce()
+    const detailSignal = vi.mocked(jobsApi.fetchJob).mock.calls[0][1]
+    queue.stopPolling()
+    expect(detailSignal?.aborted).toBe(true)
+    const reads = vi.mocked(jobsApi.fetchJobs).mock.calls.length
+    reject(new ApiError('Backend stopped', 'NETWORK_ERROR'))
+    await mutation
+    expect(jobsApi.fetchJobs).toHaveBeenCalledTimes(reads)
+    expect(queue.busyJobs).toEqual({})
+    expect(queue.loading).toBe(false)
+    expect(vi.getTimerCount()).toBe(0)
+  })
   it('does not overlap reads and aborts stale results after unmount', async () => {
     let resolve!: (value: JobPage) => void
     vi.mocked(jobsApi.fetchJobs).mockImplementationOnce(

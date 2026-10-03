@@ -1,11 +1,12 @@
 import { mount, flushPromises } from '@vue/test-utils'
-import { createPinia, setActivePinia } from 'pinia'
+import { createPinia, getActivePinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { beforeEach, expect, it, vi } from 'vitest'
 import * as api from '../src/api/storage'
 import * as downloads from '../src/api/downloads'
 import { ApiError } from '../src/api/client'
 import { useStorageStore } from '../src/stores/storage'
+import { useHealthStore } from '../src/stores/health'
 import StorageView from '../src/views/StorageView.vue'
 import DownloadView from '../src/views/DownloadView.vue'
 import type { StorageStatus } from '../src/types/storage'
@@ -100,6 +101,20 @@ it('selects a root through the backend and disconnects only after confirmation',
   expect(wrapper.text()).toContain('Not connected')
   wrapper.unmount()
 })
+it('uses a Drive folder input pattern valid under the browser Unicode sets flag', async () => {
+  vi.mocked(api.fetchStorage).mockResolvedValue(status(true))
+  const wrapper = await mountStorage()
+  try {
+    const pattern = wrapper.get('#drive-root').attributes('pattern')
+    const validation = new RegExp(`^(?:${pattern})$`, 'v')
+    for (const value of ['new-root_12', '-root', 'AbZ09_-', 'a'.repeat(256)])
+      expect(validation.test(value), value).toBe(true)
+    for (const value of ['', 'folder/name', 'folder name', 'a'.repeat(257)])
+      expect(validation.test(value), value).toBe(false)
+  } finally {
+    wrapper.unmount()
+  }
+})
 it('preserves cached status on offline failure, disables Drive and recovers', async () => {
   const store = useStorageStore()
   vi.mocked(api.fetchStorage).mockResolvedValue(status(true))
@@ -129,6 +144,99 @@ it('serializes repeated storage actions and displays server failures', async () 
   await first
   expect(store.error).toBe('OAuth failed safely')
   expect(store.busy).toBe(false)
+})
+it('aborts an unfinished status read on unmount and discards its late response', async () => {
+  let finish!: (value: StorageStatus) => void
+  vi.mocked(api.fetchStorage).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const wrapper = await mountStorage()
+  const store = useStorageStore()
+  const signal = vi.mocked(api.fetchStorage).mock.calls[0][0]
+  wrapper.unmount()
+  expect(signal?.aborted).toBe(true)
+  finish(status(true))
+  await flushPromises()
+  expect(store.status).toBeNull()
+  expect(store.loading).toBe(false)
+  const remounted = await mountStorage()
+  expect(useStorageStore().status?.providers[0].available).toBe(true)
+  remounted.unmount()
+})
+it('discards a late connect result and reloads status for the newly mounted route', async () => {
+  const wrapper = await mountStorage()
+  const store = useStorageStore()
+  let finish!: (value: { authorization_url: string }) => void
+  vi.mocked(api.connectDrive).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const mutation = store.action('connect')
+  wrapper.unmount()
+  const remounted = mount(DownloadView, {
+    global: { plugins: [getActivePinia()!], stubs: { RouterLink: true } },
+  })
+  finish({ authorization_url: 'https://accounts.google.com/o/oauth2/auth?state=old-route' })
+  await mutation
+  await flushPromises()
+  expect(store.authorizationUrl).toBeNull()
+  expect(api.fetchStorage).toHaveBeenCalledTimes(2)
+  expect(store.busy).toBe(false)
+  remounted.unmount()
+})
+it('updates backend connection health on Storage failure and recovery', async () => {
+  const health = useHealthStore()
+  health.status = 'reachable'
+  const store = useStorageStore()
+  vi.mocked(api.fetchStorage).mockRejectedValueOnce(new ApiError('Offline', 'NETWORK_ERROR'))
+  await store.load()
+  expect(health.status).toBe('unreachable')
+  await store.load()
+  expect(health.status).toBe('reachable')
+})
+it('keeps Local usable while a pending Drive mutation makes Drive availability uncertain', async () => {
+  vi.mocked(api.fetchStorage).mockResolvedValue(status(true))
+  const wrapper = mount(DownloadView, {
+    global: { plugins: [createPinia()], stubs: { RouterLink: true } },
+  })
+  await flushPromises()
+  await wrapper.get('#storage-target').setValue('google_drive')
+  const store = useStorageStore()
+  let finish!: (value: StorageStatus) => void
+  vi.mocked(api.disconnectDrive).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const mutation = store.action('disconnect')
+  expect(store.driveReady).toBe(false)
+  await flushPromises()
+  expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+  await wrapper.get('#storage-target').setValue('local')
+  expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeUndefined()
+  finish(status(false))
+  await mutation
+  wrapper.unmount()
+})
+it('disables submission when the backend marks Local unavailable', async () => {
+  const unavailable = status()
+  unavailable.providers[0].available = false
+  vi.mocked(api.fetchStorage).mockResolvedValue(unavailable)
+  const wrapper = mount(DownloadView, {
+    global: { plugins: [createPinia()], stubs: { RouterLink: true } },
+  })
+  await flushPromises()
+  await wrapper.get('textarea').setValue('https://youtube.com/watch?v=test')
+  await wrapper.get('form').trigger('submit')
+  expect(downloads.submitDownloads).not.toHaveBeenCalled()
+  expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+  wrapper.unmount()
 })
 it.each([true, false])(
   'respects Drive default and availability %s without silent fallback',

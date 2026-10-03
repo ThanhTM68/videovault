@@ -36,7 +36,7 @@ export const useQueueStore = defineStore('queue', () => {
   const hasWork = computed(
     () =>
       (counts.value && counts.value.queued + counts.value.running > 0) ||
-      [...jobs.value, ...recentJobs.value].some(
+      (mode.value === 'queue' ? jobs.value : recentJobs.value).some(
         (job) => job.status === 'queued' || isActive(job.status),
       ),
   )
@@ -45,6 +45,7 @@ export const useQueueStore = defineStore('queue', () => {
   let pollVersion = 0
   let readVersion = 0
   let controller: AbortController | null = null
+  const recoveryReads = new Map<string, AbortController>()
   let pending: Promise<void> | null = null
   let lastCounts = Number.NEGATIVE_INFINITY
 
@@ -140,10 +141,14 @@ export const useQueueStore = defineStore('queue', () => {
         error.value = errorMessage(failure)
         useHealthStore().observe(failure)
       } finally {
+        // Promise.all rejects before its siblings settle. Retire every fetch
+        // owned by this cycle before releasing its controller or starting another.
+        current.abort()
         if (version === readVersion) {
           loading.value = false
           pending = null
           controller = null
+          schedulePoll()
         }
       }
     })()
@@ -151,23 +156,25 @@ export const useQueueStore = defineStore('queue', () => {
     return work
   }
 
+  function schedulePoll(): void {
+    if (timer) clearTimeout(timer)
+    timer = null
+    if (!polling) return
+    timer = setTimeout(
+      () => {
+        timer = null
+        void refresh()
+      },
+      error.value || !hasWork.value ? IDLE_POLL_MS : ACTIVE_POLL_MS,
+    )
+  }
   function startPolling(view: QueueView): void {
     if (polling && mode.value === view) return
     stopPolling()
     mode.value = view
     polling = true
-    const version = ++pollVersion
-    async function cycle(): Promise<void> {
-      await refresh()
-      if (polling && version === pollVersion)
-        timer = setTimeout(
-          () => {
-            void cycle()
-          },
-          error.value || !hasWork.value ? IDLE_POLL_MS : ACTIVE_POLL_MS,
-        )
-    }
-    void cycle()
+    pollVersion++
+    void refresh()
   }
   function stopPolling(): void {
     polling = false
@@ -175,6 +182,8 @@ export const useQueueStore = defineStore('queue', () => {
     if (timer) clearTimeout(timer)
     timer = null
     cancelRead()
+    for (const read of recoveryReads.values()) read.abort()
+    recoveryReads.clear()
   }
   async function setPage(value: number): Promise<void> {
     cancelRead()
@@ -195,20 +204,31 @@ export const useQueueStore = defineStore('queue', () => {
     if (busyJobs.value[id]) return
     busyJobs.value = { ...busyJobs.value, [id]: action }
     delete jobErrors.value[id]
+    const version = pollVersion
     try {
       const result = await (action === 'cancel' ? jobsApi.cancelJob(id) : jobsApi.retryJob(id))
+      if (version !== pollVersion) return
       cancelRead()
       replaceJob(result)
       await refresh(true)
     } catch (failure) {
+      if (version !== pollVersion) return
       jobErrors.value[id] = errorMessage(failure)
       useHealthStore().observe(failure)
       if (failure instanceof ApiError && failure.status === 409) {
+        const read = new AbortController()
+        recoveryReads.set(id, read)
         try {
-          replaceJob(await jobsApi.fetchJob(id))
+          const result = await jobsApi.fetchJob(id, read.signal)
+          if (version !== pollVersion || read.signal.aborted) return
+          replaceJob(result)
         } catch {
           /* Keep last server snapshot. */
+        } finally {
+          read.abort()
+          if (recoveryReads.get(id) === read) recoveryReads.delete(id)
         }
+        if (version !== pollVersion) return
         cancelRead()
         await refresh(true)
       }
@@ -220,12 +240,15 @@ export const useQueueStore = defineStore('queue', () => {
     if (controlBusy.value) return
     controlBusy.value = true
     controlError.value = null
+    const version = pollVersion
     try {
       const result = await (value ? queueApi.pauseQueue() : queueApi.resumeQueue())
+      if (version !== pollVersion) return
       cancelRead()
       paused.value = result.paused
       await refresh(true)
     } catch (failure) {
+      if (version !== pollVersion) return
       controlError.value = errorMessage(failure)
       useHealthStore().observe(failure)
     } finally {
