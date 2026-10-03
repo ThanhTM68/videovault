@@ -200,6 +200,16 @@ single-process transient previews, finite request-start rather than hard wall-cl
 deadline. Aborted UI reads may finish their bounded server enumeration. Existing storage
 orphan/last-known-state and transport DNS/rebinding limitations remain documented.
 
-All verifiable implementation requirements and final review pass. **READY TO COMMIT**.
-Phase 09 remains unchecked until the implementation commit exists; publish only the
-current phase branch, verify full local/remote SHA, then stop without merge or Phase 10.
+All verifiable implementation requirements and final review pass. **READY TO COMMIT**
+was reported before creating the implementation commit.
+
+## Git completion (2026-10-03)
+
+Implementation committed as `47366bb939849c953f259f5647009848878f6602`
+(`feat: complete phase 09 batch channel profile`) on phase/09-batch, with clean status
+after commit. Only afterward, Phase 09 was marked checked in PHASE_CHECKLIST.md.
+Acceptance/tests/review/docs/clean diff and the implementation commit are all verified.
+Earlier Phases 00-08 already retain committed evidence and remain checked; Phases 10-14
+remain unchecked. This post-implementation checklist/evidence update is a separate
+documentation commit. Publication uses only phase/09-batch and must verify fetched full
+local/remote SHA equality and clean status. No merge into main or Phase 10 branch.
