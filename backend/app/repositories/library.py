@@ -27,6 +27,16 @@ from app.services.storage.contracts import StoredObject
 
 
 class LibraryRepository(VideoRepository):
+    def identity_states(
+        self, platform: Platform, identities: list[str]
+    ) -> dict[str, tuple[bool, bool]]:
+        rows = self.session.execute(
+            select(Video.platform_video_id, self.history_exists(), self.file_exists()).where(
+                Video.platform == platform, Video.platform_video_id.in_(identities)
+            )
+        )
+        return {identity: (bool(history), bool(file)) for identity, history, file in rows}
+
     def upsert(self, metadata: NormalizedVideo) -> Video:
         creator_id = None
         if metadata.creator_id:

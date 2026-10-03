@@ -306,7 +306,8 @@ tools fail tests. No live-platform availability is required for CI.
 The default registry selects concrete YouTube/Shorts, TikTok, Douyin, Instagram, and
 Facebook adapters for supported individual URLs. Each delegates to the same core and
 exposes resolve/download as implemented capabilities; profile listing, sorting, filtering
-and batch workflows remain unsupported. `service.capabilities()` returns internal reports.
+and batch workflows remain separate from that single-video API. `service.capabilities()`
+returns internal single-video reports; Phase 09 source capabilities are described below.
 Supported URLs are documented in `docs/downloader.md`; profile/channel/playlist inputs
 fail before extraction. Douyin short links and `fb.watch` are not enabled in this phase.
 
@@ -339,3 +340,26 @@ Disconnect deletes local tokens only and preserves all files/history. Revoke Goo
 consent separately; reconnect must use the original account. No migration is required
 beyond existing head 0003_library. See [storage design](docs/storage.md) for retry/cancel, partial
 failure, orphan limitations and credential recovery details. Real Google smoke is optional.
+
+### Batch channel preview and download (Phase 09)
+
+Open **Batch** at `/batch`. Supported sources are YouTube `@handle` or `/channel/UC…`,
+optionally ending in `/videos`; previews inspect at most 100 entries and return up to
+N (1–100) safe, unique candidates. Source order means extractor order, without a
+newest or whole-channel ranking guarantee. Preview once to discover capabilities,
+then optionally apply inclusive duration bounds and preview again. Unknown duration
+is excluded only when duration filtering is requested. Dates/views remain nullable;
+newest/oldest/views sorting and date/view filters are explicitly unsupported.
+
+Select eligible candidates, choose quality/container/audio and Local or configured
+Google Drive, then **Queue selected**. Successful history is rechecked before creating
+ordinary jobs; Force redownload permits history and preserves previous files. Repeated
+selected identities create at most one job. Queue controls, storage, Library and History
+use the existing pipeline. Download options keep the preview; source/N/filter/order
+changes invalidate it. Previews are read-only, expire after ten minutes and do not
+survive backend restart, eviction or successful submission. Reload requires a new preview.
+
+TikTok, Douyin, Instagram and Facebook source listing return a clear unsupported error;
+their supported individual video URLs still work through Quick Download. No source
+subscriptions, crawler, login bypass, Editor or V2 features are introduced. Live YouTube
+and real Drive checks are optional; deterministic fixtures cover the batch workflow.

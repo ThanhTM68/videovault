@@ -56,6 +56,8 @@ def test_no_test_routes_in_default_application(settings: Settings) -> None:
     application = create_app(settings)
     assert set(application.openapi()["paths"]) == {
         "/api/v1/health",
+        "/api/v1/sources/resolve",
+        "/api/v1/sources/batch-download",
         "/api/v1/storage",
         "/api/v1/storage/google-drive/connect",
         "/api/v1/storage/google-drive/callback",

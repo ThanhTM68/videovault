@@ -22,6 +22,7 @@ import HomeView from './views/HomeView.vue'
           ><span aria-hidden="true">≡</span>Queue</RouterLink
         >
         <RouterLink to="/library" active-class="nav-active">Library</RouterLink>
+        <RouterLink to="/batch" active-class="nav-active">Batch</RouterLink>
         <RouterLink to="/history" active-class="nav-active">History</RouterLink>
         <RouterLink to="/storage" active-class="nav-active">Storage</RouterLink>
         <p class="nav-label">Coming later</p>

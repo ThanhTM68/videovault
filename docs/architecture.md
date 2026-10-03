@@ -234,3 +234,24 @@ and compensation. Reads/submission use local snapshots without waiting for uploa
 Library deletion is provider-neutral; remote list state is cached and explicit targeted
 refresh runs outside DB transactions. Storage Pinia owns configuration/actions; no new
 polling timer, cloud queue or multi-process coordination is introduced.
+
+## Phase 09 source and batch boundary
+
+Thin source routes call SourceService, which owns capability validation, bounded preview
+cache, normalization/filter orchestration, one-query history flags and pre-job dedup.
+SourceAdapterRegistry selects exact source URL policies independently of the single-video
+registry. YouTubeSourceAdapter projects safe candidate fields and frozen capabilities;
+SourceYtDlp isolates the restricted metadata-only YoutubeTab integration. No Generic
+extractor, full single-video resolution per candidate, media transfer or DB transaction
+spans source network enumeration. Two previews may enumerate concurrently; requests,
+entries, result count, source/selected-ID sizes and cached snapshots are bounded.
+
+Submission revalidates the cached membership/options/provider and fresh identity history,
+then uses the existing QueueService atomic transaction. No batch worker type or bypass
+of claim/state/cancel/retry/recovery, worker dedup, storage or library recording is added.
+The preview lock serializes short submissions and single-use consumption; no source or
+Google I/O happens while holding it. Preview is transient and read-only. Existing
+SQLite constraints and migration head remain unchanged. Batch Pinia handles stale/aborted
+reads, backend-authoritative flags and explicit actions with no polling or persisted
+browser state. Future broader sorting requires an adapter contract with explicit
+ordering/filter scope and evidence before any capability is enabled.

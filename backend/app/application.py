@@ -13,6 +13,8 @@ from app.db.session import create_database_engine, create_session_factory
 from app.services.downloader.service import DownloaderService
 from app.services.preview import PreviewService
 from app.services.queue.service import QueueService
+from app.services.sources.adapters import SourceAdapterRegistry
+from app.services.sources.service import SourceService
 from app.workers.manager import WorkerManager
 
 
@@ -51,6 +53,7 @@ def create_app(
     application.state.session_factory = sessions
     application.state.worker_manager = manager
     application.state.preview_service = PreviewService(queue.downloader, queue.library)
+    application.state.source_service = SourceService(queue, SourceAdapterRegistry())
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.frontend_origin],
