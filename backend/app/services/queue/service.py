@@ -9,6 +9,8 @@ from app.models import Job
 from app.models.enums import JobStatus as S
 from app.repositories.jobs import JobRepository
 from app.services.downloader.service import DownloaderService
+from app.services.library.files import LocalFiles
+from app.services.library.service import LibraryService
 from app.services.queue.models import Claim, DownloadPayload, JobPage, JobView
 from app.services.queue.state_machine import ACTIVE, validate_transition
 
@@ -26,13 +28,36 @@ class QueueService:
         self.sessions = sessions
         self.downloader = downloader
         self.clock = clock
+        self.library = LibraryService(
+            sessions,
+            LocalFiles(
+                downloader.settings.local_storage_root, downloader.settings.temp_storage_root
+            ),
+        )
+
+    def skip_duplicate(self, claim: Claim) -> bool:
+        view = self.get(claim.id)
+        if view.attempt_count != claim.attempt or view.status != S.RESOLVING:
+            return False
+        changed = self._write(
+            view,
+            {
+                "status": S.SKIPPED_DUPLICATE,
+                "current_step": "skipped_duplicate",
+                "completed_at": self.clock(),
+            },
+            require_uncancelled=True,
+        )
+        if changed:
+            logger.info("Duplicate skipped (%s)", claim.id)
+        return changed is not None
 
     def submit(self, payloads: Sequence[DownloadPayload]) -> list[JobView]:
         if not 1 <= len(payloads) <= 100:
             raise ConflictError("Submit between 1 and 100 URLs")
         # Pure validation only; no resolution/network or filesystem work before commit.
         for payload in payloads:
-            self.downloader.prepare_request(**payload.model_dump())
+            self.downloader.prepare_request(**payload.model_dump(exclude={"force"}))
         with self.sessions.begin() as session:
             repository = JobRepository(session)
             rows = [
@@ -86,6 +111,7 @@ class QueueService:
         require_uncancelled: bool = False,
         stale_before: datetime | None = None,
         operation: str = "execute",
+        on_completed: Callable[[Session], None] | None = None,
     ) -> JobView | None:
         target = values.get("status", view.status)
         if target != view.status:
@@ -101,6 +127,19 @@ class QueueService:
                 check_cancel_request=operation == "recover",
                 cancel_request=view.cancel_requested_at,
             )
+            if job and on_completed:
+                on_completed(session)
+            if job and (job.status in {S.FAILED, S.CANCELLED} or operation == "recover"):
+                from app.repositories.library import LibraryRepository
+
+                LibraryRepository(session).close_attempts(
+                    view.id,
+                    view.attempt_count,
+                    cancelled=job.status == S.CANCELLED,
+                    code=job.error_code or "WORKER_LOST",
+                    message=job.error_message or "Worker stopped before completing the job",
+                    now=self.clock(),
+                )
             return JobView.from_job(job) if job else None
 
     def cancel(self, job_id: str) -> JobView:
@@ -179,6 +218,7 @@ class QueueService:
         error_code: str | None = None,
         error_message: str | None = None,
         cancelled: bool = False,
+        on_completed: Callable[[Session], None] | None = None,
     ) -> bool:
         for _ in range(4):
             view = self.get(claim.id)
@@ -202,7 +242,12 @@ class QueueService:
             }
             if status == S.COMPLETED:
                 values["progress_percent"] = 100
-            changed = self._write(view, values, require_uncancelled=not cancel)
+            changed = self._write(
+                view,
+                values,
+                require_uncancelled=not cancel,
+                on_completed=on_completed if status == S.COMPLETED else None,
+            )
             if changed:
                 logger.info("Job %s (%s)", status.value, claim.id)
                 return status == S.COMPLETED

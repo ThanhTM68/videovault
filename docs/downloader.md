@@ -162,7 +162,7 @@ removed or replaced. Independent invocations cannot collide.
 On failure, cleanup removes only the invocation's checked workspace. A cleanup failure
 is logged by category and never turns the operation into success. The service does not
 delete paths outside that workspace. Successful output remains temporary and caller-owned;
-future storage/library services must explicitly consume or remove it. No permanent move,
+Phase 07 workers explicitly consume or remove it. No permanent move,
 media row, job, download record, or duplicate decision occurs here.
 
 `services/media/probe.py` discovers tools and runs ffprobe with an argument array,
@@ -203,7 +203,31 @@ only after execution and cleanup stop; a cancel request racing a validated retur
 discard_result to remove only that invocation's temporary workspace before acknowledgement.
 Completed callback alone never finalizes a durable job; successful return is required.
 These additions supersede the earlier Phase 03/04 deferral of cancellation above.
-No history/storage workflow or credential support is introduced.
+The downloader itself adds no history or credential workflow. Phase 07 worker/library
+orchestration consumes its validated output as described below.
+
+### Phase 07 identity and durable completion
+
+The queue worker resolves `(platform, platform_video_id)` before entering the shared
+identity lock, upserts nonempty metadata and queries completed Download events. A normal
+duplicate skips before calling download, regardless of file deletion/missing status.
+Force starts a real attempt. Download still uses existing adapters, format selection,
+cooperative cancellation and real ffprobe validation; the returned identity must match
+the pre-resolved identity. No yt-dlp calls were added to API handlers.
+
+LocalFiles copies validated output into an exclusively created unique managed filename
+under LOCAL_STORAGE_ROOT, fsyncs it, streams SHA-256 in 1 MiB chunks and verifies size.
+Only then can the worker commit MediaFile, successful Download and fenced Job completion.
+The temporary workspace is consumed after success. On copy/hash/commit failure or lost
+cancellation, only newly owned output is removed; older forced files remain intact.
+Retries have distinct attempt events; restart recovery closes stale events. No full-file
+hash buffer, ffmpeg hash subprocess, filename/history inference or hash identity dedup.
+
+Managed keys must be relative; lexical traversal, drive/absolute paths, backslashes,
+symlinks and Windows reparse points are rejected independently of DB contents. Delete
+operations cannot unlink an external file, even if a corrupt row points to it. Public
+Library/History/Job responses never expose managed roots or absolute local paths.
+Crash-window or failed-cleanup orphans and full-root reconciliation are deferred.
 
 The core uses a finite 30-second network socket timeout and one retry for transport,
 fragments, and extractor operations. There is no service-level retry loop. User/CLI config

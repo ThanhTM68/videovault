@@ -51,6 +51,10 @@ class DownloaderService:
     def capabilities(self) -> dict[Platform, AdapterCapabilities]:
         return self._registry.capabilities()
 
+    @property
+    def settings(self) -> Settings:
+        return self._settings
+
     def resolve(self, url: str) -> NormalizedVideo:
         url = validate_video_url(url)
         adapter = self._adapter(url)

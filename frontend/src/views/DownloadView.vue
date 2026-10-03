@@ -7,6 +7,7 @@ const text = ref('')
 const maxHeight = ref<1080 | 720 | 480>(1080)
 const container = ref<'mp4' | 'mkv' | 'webm'>('mp4')
 const audio = ref(true)
+const force = ref(false)
 const validation = ref<string | null>(null)
 const imageFailed = ref(false)
 const urls = computed(() => parseUrls(text.value))
@@ -29,6 +30,7 @@ async function submit(): Promise<void> {
     max_height: maxHeight.value,
     preferred_container: container.value,
     audio_enabled: audio.value,
+    ...(force.value ? { force: true } : {}),
   })
 }
 async function preview(): Promise<void> {
@@ -82,6 +84,12 @@ async function preview(): Promise<void> {
         </div>
       </div>
       <label class="checkbox-label"><input v-model="audio" type="checkbox" />Include audio</label>
+      <label class="checkbox-label"
+        ><input v-model="force" type="checkbox" />Force redownload</label
+      >
+      <p class="muted small">
+        Force downloads again even when successful history exists; existing files are kept.
+      </p>
       <p class="muted small">
         Quality depends on the source and your backend limit. Video-only output requires a
         video-only source format.
@@ -129,6 +137,10 @@ async function preview(): Promise<void> {
           <span class="badge">{{ downloads.preview.platform }}</span>
           <h3 class="preview-title">{{ downloads.preview.title || 'Untitled video' }}</h3>
           <p>{{ downloads.preview.creator || 'Creator unavailable' }}</p>
+          <p v-if="downloads.preview.has_download_history !== undefined" class="muted small">
+            Successful history: {{ downloads.preview.has_download_history ? 'Yes' : 'No' }} · File
+            present: {{ downloads.preview.has_file ? 'Yes' : 'No' }}
+          </p>
           <p class="muted small">
             {{
               downloads.preview.duration_seconds === null
@@ -145,8 +157,8 @@ async function preview(): Promise<void> {
       <section class="note-panel">
         <h3>Your local workspace</h3>
         <p>
-          Downloads currently stay in temporary storage. Library and permanent storage arrive in
-          later phases.
+          Completed downloads are saved in your local Library. Successful history prevents normal
+          duplicate downloads.
         </p>
         <p>Use public content or content you are authorized to store.</p>
       </section>

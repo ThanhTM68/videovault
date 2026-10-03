@@ -45,7 +45,7 @@ def test_fresh_migration_and_metadata_parity(db_engine: Engine) -> None:
     with db_engine.connect() as connection:
         assert (
             connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-            == "0002_queue"
+            == "0003_library"
         )
         context = MigrationContext.configure(connection, opts={"compare_type": True})
         assert compare_metadata(context, Base.metadata) == []
@@ -80,6 +80,7 @@ def test_actual_fk_and_index_contract(db_engine: Engine) -> None:
     assert {index["name"] for index in inspector.get_indexes("downloads")} == {
         "ix_downloads_video_id",
         "ix_downloads_job_id",
+        "ix_downloads_job_attempt",
     }
     for table in ("creators", "videos", "downloads", "jobs", "media_files", "storage_accounts"):
         assert inspector.get_check_constraints(table)

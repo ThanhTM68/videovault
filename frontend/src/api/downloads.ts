@@ -33,7 +33,10 @@ export function resolvePreview(url: string, signal?: AbortSignal): Promise<Video
       nullableString(data.thumbnail_url) &&
       nullableNumber(data.duration_seconds) &&
       nullableNumber(data.width) &&
-      nullableNumber(data.height),
+      nullableNumber(data.height) &&
+      (data.video_id === undefined || nullableString(data.video_id)) &&
+      (data.has_file === undefined || typeof data.has_file === 'boolean') &&
+      (data.has_download_history === undefined || typeof data.has_download_history === 'boolean'),
     { method: 'POST', body: { url }, signal, timeout: 35000 },
   )
 }

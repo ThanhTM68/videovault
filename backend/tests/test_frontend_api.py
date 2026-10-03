@@ -46,6 +46,9 @@ def test_preview_projection_sanitizes_input_without_jobs_or_downloads(
         "width",
         "height",
         "thumbnail_url",
+        "video_id",
+        "has_file",
+        "has_download_history",
     }
     assert response.json()["platform"] == "youtube"
     resolve.assert_called_once_with(URL)

@@ -13,7 +13,7 @@ class DownloadSubmission(DomainModel):
     preferred_container: Literal["mp4", "mkv", "webm"] = "mp4"
     audio_enabled: bool = Field(default=True, strict=True)
     storage_target: Literal["local"] = "local"
-    force: Literal[False] = False
+    force: bool = Field(default=False, strict=True)
 
     @field_validator("urls")
     @classmethod
@@ -30,6 +30,7 @@ class DownloadSubmission(DomainModel):
                 max_height=self.max_height or default_height,
                 preferred_container=self.preferred_container,
                 audio_enabled=self.audio_enabled,
+                force=self.force,
             )
             for url in self.urls
         ]

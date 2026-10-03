@@ -137,6 +137,7 @@ Represents requested/completed download events.
 - id
 - video_id
 - job_id nullable
+- attempt_number nullable (0003_library; legacy events remain NULL)
 - requested_quality
 - status
 - started_at
@@ -165,6 +166,7 @@ History logic should query successful downloads.
 - exists_last_checked_at nullable
 - created_at
 - deleted_at nullable
+- missing_at nullable (0003_library; missing is distinct from deliberately deleted)
 
 ### jobs
 - id
@@ -202,7 +204,39 @@ Existing progress_percent remains nonnullable: unknown/reset is 0, pre-success m
 cancelled_at records acknowledgement; completed_at timestamps all terminal outcomes.
 Retry clears runtime/error/request fields, retains attempt_count. max_attempts defaults
 to 3 total started attempts. Queue pause is runtime state, without a settings table.
-No results/history/media rows or permanent library references are added in this phase.
+Phase 05 originally left validated output temporary. Phase 07 extends the worker with
+the durable Video/Download/MediaFile lifecycle below.
+
+### Phase 07 library extension
+
+Revision `0003_library` adds nullable downloads.attempt_number, unique index
+ix_downloads_job_attempt(job_id, attempt_number), and nullable media_files.missing_at.
+0001_v1 and 0002_queue are unchanged. Existing data remains valid, including legacy
+downloads with NULL attempt/job links. Upgrade/downgrade/re-upgrade on populated 0002
+data preserves Video, Download and MediaFile links and passes foreign_key_check.
+Downgrade drops only the two columns and attempt index; migrations never delete media.
+
+Video identity is `(platform, platform_video_id)`. Metadata upsert uses the existing
+DB unique constraint and merges nonempty fields; creators reuse reliable platform IDs.
+Creator names without reliable IDs remain metadata, not invented Creator identities.
+One Download is inserted per actual resolved job attempt, initially downloading.
+requested_quality stores compact JSON: max_height, preferred_container, audio_enabled,
+force. Retries produce another event/attempt_number; skipped duplicates and resolution
+failures before an attempt starts do not fabricate events. Restart recovery closes
+stale execution events as failed (WORKER_LOST) or cancelled in the same job transaction.
+
+After validated output is copied to an exclusive durable name and SHA-256 is streamed,
+MediaFile, completed Download and cancellation/attempt-fenced Job completion commit
+in one short transaction. Copy/hash/media/delete I/O never holds a DB transaction.
+Copy/hash/DB failures or losing cancellation remove owned new output where possible;
+no completed event is retained after rollback. Historical success, not file existence
+or hash, blocks normal identity downloads. Forced attempts retain older files/events.
+
+History removal hard-deletes Download rows and uses the existing ON DELETE SET NULL
+MediaFile.download_id relationship. Video, Creator, MediaFile, tags and collections
+remain. File deletion marks deleted_at and keeps history; externally missing files
+set missing_at on page/detail checks. Public flags distinguish active file presence
+from completed history. File-filter queries use last-known missing/deleted state.
 
 ### collections
 - id

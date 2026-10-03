@@ -17,6 +17,7 @@ class DownloadPayload(DomainModel):
     max_height: int = Field(ge=1, le=1080, strict=True)
     preferred_container: Literal["mp4", "mkv", "webm"] = "mp4"
     audio_enabled: bool = Field(default=True, strict=True)
+    force: bool = Field(default=False, strict=True)
 
     @field_validator("url")
     @classmethod

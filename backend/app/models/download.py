@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Text
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedMixin, IdentityMixin
@@ -12,12 +12,14 @@ from app.models.video import Video
 
 class Download(IdentityMixin, CreatedMixin, Base):
     __tablename__ = "downloads"
+    __table_args__ = (Index("ix_downloads_job_attempt", "job_id", "attempt_number", unique=True),)
 
     video_id: Mapped[str] = mapped_column(ForeignKey("videos.id", ondelete="RESTRICT"), index=True)
     job_id: Mapped[str | None] = mapped_column(
         ForeignKey("jobs.id", ondelete="SET NULL"), index=True
     )
     requested_quality: Mapped[str] = mapped_column(Text, default="best")
+    attempt_number: Mapped[int | None]
     status: Mapped[DownloadStatus] = mapped_column(
         enum_column(DownloadStatus, "download_status"), default=DownloadStatus.QUEUED
     )
@@ -60,6 +62,7 @@ class MediaFile(IdentityMixin, CreatedMixin, Base):
     kind: Mapped[MediaKind] = mapped_column(enum_column(MediaKind, "media_kind"))
     exists_last_checked_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    missing_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
 
     video: Mapped[Video] = relationship(back_populates="media_files")
     download: Mapped[Download | None] = relationship(back_populates="media_files")
