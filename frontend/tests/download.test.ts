@@ -7,6 +7,15 @@ import { ApiError } from '../src/api/client'
 import { parseUrls, validateUrls } from '../src/utils/download'
 
 vi.mock('../src/api/downloads', () => ({ submitDownloads: vi.fn(), resolvePreview: vi.fn() }))
+vi.mock('../src/api/storage', () => ({
+  fetchStorage: vi.fn(async () => ({
+    default_target: 'local',
+    providers: [
+      { provider: 'local', available: true },
+      { provider: 'google_drive', available: false },
+    ],
+  })),
+}))
 const mountForm = () =>
   mount(DownloadView, {
     global: { plugins: [createPinia()], stubs: { RouterLink: { template: '<a><slot /></a>' } } },
@@ -66,6 +75,7 @@ describe('Quick Download', () => {
       max_height: 720,
       preferred_container: 'mkv',
       audio_enabled: false,
+      storage_target: 'local',
     })
     expect(wrapper.text()).toContain('2 jobs created')
     expect(api.resolvePreview).not.toHaveBeenCalled()

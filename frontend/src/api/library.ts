@@ -53,13 +53,15 @@ export const isDetail = (data: unknown): data is VideoDetail =>
     (file) =>
       isRecord(file) &&
       typeof file.id === 'string' &&
+      ['local', 'google_drive'].includes(String(file.storage_provider)) &&
+      typeof file.file_name === 'string' &&
       typeof file.size_bytes === 'number' &&
       file.size_bytes >= 0 &&
       nullableString(file.sha256) &&
       typeof file.container === 'string' &&
       nullableNumber(file.width) &&
       nullableNumber(file.height) &&
-      ['available', 'missing', 'deleted', 'unavailable'].includes(String(file.state)),
+      ['available', 'stored', 'missing', 'deleted', 'unavailable'].includes(String(file.state)),
   )
 function isPage<T>(guard: (value: unknown) => value is T): (value: unknown) => value is Page<T> {
   return (data): data is Page<T> =>
@@ -88,6 +90,11 @@ export const fetchDetail = (id: string, signal?: AbortSignal): Promise<VideoDeta
   request('/videos/' + encodeURIComponent(id), isDetail, { signal })
 export const destroyVideo = (id: string, action: DeleteOperation): Promise<VideoDetail> =>
   request(`/videos/${encodeURIComponent(id)}/${action}`, isDetail, { method: 'DELETE' })
+export const refreshFiles = (id: string): Promise<VideoDetail> =>
+  request(`/videos/${encodeURIComponent(id)}/refresh-files`, isDetail, {
+    method: 'POST',
+    timeout: 120000,
+  })
 export const forceRedownload = (id: string): Promise<DownloadSubmissionResponse> =>
   request(
     `/videos/${encodeURIComponent(id)}/redownload`,

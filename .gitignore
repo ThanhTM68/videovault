@@ -34,3 +34,5 @@ data/thumbnails/*
 credentials*.json
 token*.json
 cookies*.txt
+private-auth/
+client_secret*.json

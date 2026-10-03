@@ -7,7 +7,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from pydantic import Field, field_validator
 
 from app.models import Job
-from app.models.enums import JobStatus
+from app.models.enums import JobStatus, StorageProvider
 from app.services.downloader.models import DomainModel
 from app.services.downloader.platform import validate_video_url
 
@@ -18,6 +18,7 @@ class DownloadPayload(DomainModel):
     preferred_container: Literal["mp4", "mkv", "webm"] = "mp4"
     audio_enabled: bool = Field(default=True, strict=True)
     force: bool = Field(default=False, strict=True)
+    storage_target: StorageProvider = StorageProvider.LOCAL
 
     @field_validator("url")
     @classmethod

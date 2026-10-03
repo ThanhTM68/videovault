@@ -263,3 +263,14 @@ evidence of full site support. No live-site check was required for this phase.
 
 Deferred: broader platform URL forms, discovery/crawling, persistent queue/cancellation,
 history/dedup, Drive, batch, editor, similarity, codec conversion, and unknown-height policy.
+
+## Phase 08 final destination integration
+
+Queue payload includes local/google_drive storage_target; downloader preparation excludes
+it and force. Both destinations use the same resolve/download/process/probe path.
+Worker hands validated TEMP output to StorageService; Drive adds uploading progress.
+Provider success precedes atomic MediaFile/Download/Job completion, then TEMP cleanup.
+Failed/cancelled attempts compensate only new output and clean TEMP after that attempt;
+retry downloads anew. Identity history still drives duplicate skips across providers.
+Source adapters never import or call the Google SDK. Drive is implemented in Phase 08;
+Batch/Editor and later features remain deferred.

@@ -131,7 +131,7 @@ onUnmounted(() => {
       </p>
       <p>
         History: {{ video.has_download_history ? 'Successful' : 'No successful history'
-        }}<br />File: {{ video.has_file ? 'Present' : 'No file' }}
+        }}<br />Stored file: {{ video.has_file ? 'Stored (Drive last-known)' : 'No file' }}
       </p>
       <p class="muted small">
         {{ video.tags.map((item) => item.name).join(' · ') || 'No personal tags' }}

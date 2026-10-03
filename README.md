@@ -114,7 +114,8 @@ Phase 06 adds Dashboard, Quick Download and Queue, with typed API calls, optiona
 single-video metadata preview, job progress/actions and authoritative pause state.
 Phase 07 adds a durable local Library, download-event History, identity dedup,
 force redownload, collections, personal tags and distinct file/history deletion.
-The next planned phase is **Phase 08 — Storage Providers & Google Drive**.
+Phase 08 adds optional Google Drive storage, backend OAuth and provider-neutral finalization.
+The next planned phase is **Phase 09 - Batch** (not implemented).
 
 ### Frontend workflow
 
@@ -154,7 +155,8 @@ All three preserve video metadata, personal tags and collection membership.
 Personal tags normalize whitespace and case; source hashtags remain source metadata.
 Collections and tags can be created, attached and removed from a video. Filters use
 last-known file presence; viewing a page/detail reconciles the files it checks. There
-is no automatic full-root rescan, orphan sweeping, media-serving or Drive integration.
+is no automatic full-root rescan, orphan sweeping or media-serving. Drive presence is
+last-known until an explicit file-availability refresh.
 
 ### Backend foundation configuration
 
@@ -179,8 +181,8 @@ normal FastAPI dependency overrides without a global settings cache.
 
 Relative storage/database paths resolve against the repository root; absolute paths
 remain absolute. App construction is lazy; normal startup opens the migrated database
-for recovery, but does not migrate or create storage directories. `STORAGE_PROVIDER`
-and Google Drive placeholders in `.env.example` remain unused.
+for recovery, but does not migrate or contact Google. `STORAGE_PROVIDER` accepts
+local/google_drive; Google configuration is optional. See Drive setup below.
 
 Application log level is DEBUG in development and INFO in test/production, using
 timestamp, level, module, and message. Unexpected errors log their exception class
@@ -242,9 +244,9 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/jobs/$jobId"
 ```
 
 Replace the example with public content you are authorized to store. Submit 1..100 URLs;
-container defaults to mp4 and audio to true. Only storage_target=local is accepted.
+container defaults to mp4 and audio to true. storage_target accepts local/google_drive and otherwise uses STORAGE_PROVIDER.
 force is a strict boolean, default false. Validated media is copied from TEMP_STORAGE_ROOT
-to unique durable files beneath LOCAL_STORAGE_ROOT before a job can become completed.
+through the selected storage provider before the atomic completion commit.
 The 202 response is {jobs:[{id,status:"queued"}]}; poll GET jobs/{id} or GET jobs (optional
 status/type/page/page_size). Jobs exclude URLs, internal payloads and result paths.
 
@@ -314,3 +316,26 @@ cookies and challenge requirements return stable errors without bypass. The exis
 yt-dlp dependency is pinned to 2026.8.19 to keep its TikTok challenge-rejection guard
 reviewable; upgrades require reviewing that hook and rerunning tests. No cookie/browser
 session configuration or new scraping dependencies are introduced.
+
+### Optional Google Drive setup (Phase 08)
+
+1. Install the updated backend dependencies with `pip install -e './backend[dev]'`.
+2. In Google Cloud, enable Drive API, configure consent/test users and create a Web
+   application OAuth client. Register the exact backend callback
+   `http://127.0.0.1:8000/api/v1/storage/google-drive/callback` (adjust backend port if needed).
+3. Set GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET, GOOGLE_DRIVE_REDIRECT_URI in
+   local `.env`. Restart backend. Blank defaults keep Local fully usable.
+4. Open **Storage**, connect, continue to Google and grant `drive.file` access. Then
+   create/reuse the VideoVault root or select a folder already accessible to this app.
+   Arbitrary folders are not automatically accessible; no Picker/broad Drive scope is used.
+5. Choose Google Drive in Quick Download, or set STORAGE_PROVIDER=google_drive for the
+   default. A disconnected/unconfigured target fails explicitly without local fallback.
+6. Library labels provider and last-known Drive presence. Use Refresh file availability
+   for a targeted check. Delete file keeps history; Remove history keeps files.
+
+Private tokens live in ignored PRIVATE_AUTH_ROOT/google-drive.json; never share or commit
+it. On Windows restrict the directory ACL to your backend user; chmod is not sufficient.
+Disconnect deletes local tokens only and preserves all files/history. Revoke Google
+consent separately; reconnect must use the original account. No migration is required
+beyond existing head 0003_library. See [storage design](docs/storage.md) for retry/cancel, partial
+failure, orphan limitations and credential recovery details. Real Google smoke is optional.

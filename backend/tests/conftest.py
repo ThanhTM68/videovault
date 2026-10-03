@@ -33,6 +33,7 @@ def settings(tmp_path: Path) -> Settings:
         local_storage_root=tmp_path / "library",
         temp_storage_root=tmp_path / "temp",
         thumbnail_storage_root=tmp_path / "thumbnails",
+        private_auth_root=tmp_path / "private-auth",
     )
 
 

@@ -1,8 +1,33 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useStorageStore } from '../stores/storage'
+import type { StorageProvider } from '../types/storage'
 import { useDownloadsStore } from '../stores/downloads'
 import { MAX_URLS, parseUrls, safeImageUrl, validateUrls } from '../utils/download'
 const downloads = useDownloadsStore()
+const storage = useStorageStore()
+const target = ref<StorageProvider>('local')
+const targetReady = computed(
+  () =>
+    !!storage.status &&
+    !storage.error &&
+    !storage.loading &&
+    (target.value === 'local' || storage.driveReady),
+)
+let defaultApplied = false
+watch(
+  () => storage.status?.default_target,
+  (value) => {
+    if (value && !defaultApplied) {
+      target.value = value
+      defaultApplied = true
+    }
+  },
+  { immediate: true },
+)
+onMounted(() => {
+  void storage.load()
+})
 const text = ref('')
 const maxHeight = ref<1080 | 720 | 480>(1080)
 const container = ref<'mp4' | 'mkv' | 'webm'>('mp4')
@@ -25,11 +50,13 @@ onUnmounted(() => {
 async function submit(): Promise<void> {
   validation.value = validateUrls(urls.value)
   if (validation.value) return
+  if (!targetReady.value) return
   await downloads.submit({
     urls: urls.value,
     max_height: maxHeight.value,
     preferred_container: container.value,
     audio_enabled: audio.value,
+    storage_target: target.value,
     ...(force.value ? { force: true } : {}),
   })
 }
@@ -84,6 +111,20 @@ async function preview(): Promise<void> {
         </div>
       </div>
       <label class="checkbox-label"><input v-model="audio" type="checkbox" />Include audio</label>
+      <label for="storage-target">Storage destination</label>
+      <select id="storage-target" v-model="target">
+        <option value="local">Local</option>
+        <option value="google_drive" :disabled="!storage.driveReady">
+          Google Drive{{ storage.driveReady ? '' : ' (unavailable)' }}
+        </option>
+      </select>
+      <p v-if="!targetReady" class="muted">
+        Loading or unavailable destination. <RouterLink to="/storage">Manage Storage</RouterLink>
+      </p>
+      <p v-if="storage.error" role="alert" class="error">
+        {{ storage.error }}
+        <button type="button" @click="storage.load">Retry storage status</button>
+      </p>
       <label class="checkbox-label"
         ><input v-model="force" type="checkbox" />Force redownload</label
       >
@@ -96,7 +137,7 @@ async function preview(): Promise<void> {
       </p>
       <p v-if="downloads.error" role="alert" class="error-panel">{{ downloads.error }}</p>
       <div class="form-actions">
-        <button type="submit" :disabled="downloads.submitting">
+        <button type="submit" :disabled="downloads.submitting || !targetReady">
           {{ downloads.submitting ? 'Submitting…' : 'Queue downloads' }}</button
         ><button
           type="button"
@@ -138,8 +179,8 @@ async function preview(): Promise<void> {
           <h3 class="preview-title">{{ downloads.preview.title || 'Untitled video' }}</h3>
           <p>{{ downloads.preview.creator || 'Creator unavailable' }}</p>
           <p v-if="downloads.preview.has_download_history !== undefined" class="muted small">
-            Successful history: {{ downloads.preview.has_download_history ? 'Yes' : 'No' }} · File
-            present: {{ downloads.preview.has_file ? 'Yes' : 'No' }}
+            Successful history: {{ downloads.preview.has_download_history ? 'Yes' : 'No' }} · Stored
+            file (Drive last-known): {{ downloads.preview.has_file ? 'Yes' : 'No' }}
           </p>
           <p class="muted small">
             {{
@@ -157,8 +198,8 @@ async function preview(): Promise<void> {
       <section class="note-panel">
         <h3>Your local workspace</h3>
         <p>
-          Completed downloads are saved in your local Library. Successful history prevents normal
-          duplicate downloads.
+          Completed downloads appear in Library with their selected storage destination. Successful
+          history prevents normal duplicate downloads.
         </p>
         <p>Use public content or content you are authorized to store.</p>
       </section>

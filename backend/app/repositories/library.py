@@ -18,12 +18,12 @@ from app.models import (
     VideoTag,
 )
 from app.models.enums import DownloadStatus as D
-from app.models.enums import MediaKind, Platform, StorageProvider
+from app.models.enums import MediaKind, Platform
 from app.repositories.videos import VideoRepository
 from app.services.downloader.models import NormalizedVideo
 from app.services.downloader.service import DownloadResult
-from app.services.library.files import FinalizedFile
 from app.services.queue.models import Claim, DownloadPayload
+from app.services.storage.contracts import StoredObject
 
 
 class LibraryRepository(VideoRepository):
@@ -97,7 +97,6 @@ class LibraryRepository(VideoRepository):
             MediaFile.video_id == Video.id,
             MediaFile.deleted_at.is_(None),
             MediaFile.missing_at.is_(None),
-            MediaFile.storage_provider == StorageProvider.LOCAL,
         )
 
     def has_history(self, video_id: str) -> bool:
@@ -233,7 +232,7 @@ class LibraryRepository(VideoRepository):
         self.session.flush()
         return row
 
-    def save_result(self, event_id: str, result: DownloadResult, final: FinalizedFile) -> None:
+    def save_result(self, event_id: str, result: DownloadResult, final: StoredObject) -> None:
         event = self.session.get(Download, event_id)
         if event is None:
             raise ValueError("Download event missing")
@@ -243,12 +242,10 @@ class LibraryRepository(VideoRepository):
             MediaFile(
                 video_id=event.video_id,
                 download_id=event.id,
-                storage_provider=StorageProvider.LOCAL,
+                storage_provider=final.provider,
                 storage_key=final.key,
-                file_name=final.key,
-                mime_type={".mp4": "video/mp4", ".mkv": "video/x-matroska", ".webm": "video/webm"}[
-                    result.path.suffix.lower()
-                ],
+                file_name=final.file_name,
+                mime_type=final.mime_type,
                 size_bytes=final.size,
                 sha256=final.sha256,
                 width=result.probe.width,

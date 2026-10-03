@@ -29,7 +29,9 @@ def submit_downloads(
     body: DownloadSubmission, manager: Manager, settings: Annotated[Settings, Depends(get_settings)]
 ) -> SubmissionResult:
     # The queue validates all payloads before committing any row.
-    jobs = manager.queue.submit(body.payloads(settings.download_max_height))
+    jobs = manager.queue.submit(
+        body.payloads(settings.download_max_height, settings.storage_provider)
+    )
     manager.notify()
     return SubmissionResult(jobs=[SubmittedJob(id=job.id) for job in jobs])
 

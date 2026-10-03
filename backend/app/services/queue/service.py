@@ -9,10 +9,10 @@ from app.models import Job
 from app.models.enums import JobStatus as S
 from app.repositories.jobs import JobRepository
 from app.services.downloader.service import DownloaderService
-from app.services.library.files import LocalFiles
 from app.services.library.service import LibraryService
 from app.services.queue.models import Claim, DownloadPayload, JobPage, JobView
 from app.services.queue.state_machine import ACTIVE, validate_transition
+from app.services.storage.service import StorageService
 
 logger = logging.getLogger(__name__)
 
@@ -24,16 +24,13 @@ class QueueService:
         downloader: DownloaderService,
         *,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        storage: StorageService | None = None,
     ) -> None:
         self.sessions = sessions
         self.downloader = downloader
         self.clock = clock
-        self.library = LibraryService(
-            sessions,
-            LocalFiles(
-                downloader.settings.local_storage_root, downloader.settings.temp_storage_root
-            ),
-        )
+        self.storage = storage or StorageService(downloader.settings, sessions)
+        self.library = LibraryService(sessions, self.storage)
 
     def skip_duplicate(self, claim: Claim) -> bool:
         view = self.get(claim.id)
@@ -55,9 +52,12 @@ class QueueService:
     def submit(self, payloads: Sequence[DownloadPayload]) -> list[JobView]:
         if not 1 <= len(payloads) <= 100:
             raise ConflictError("Submit between 1 and 100 URLs")
-        # Pure validation only; no resolution/network or filesystem work before commit.
+        # Local configuration validation only; no resolution or remote storage I/O.
         for payload in payloads:
-            self.downloader.prepare_request(**payload.model_dump(exclude={"force"}))
+            self.downloader.prepare_request(
+                **payload.model_dump(exclude={"force", "storage_target"})
+            )
+            self.storage.check_available(payload.storage_target)
         with self.sessions.begin() as session:
             repository = JobRepository(session)
             rows = [

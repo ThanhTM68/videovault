@@ -39,12 +39,14 @@ export interface HistoryItem {
 }
 export interface FileSummary {
   id: string
+  storage_provider: import('./storage').StorageProvider
+  file_name: string
   size_bytes: number
   sha256: string | null
   container: string
   width: number | null
   height: number | null
-  state: 'available' | 'missing' | 'deleted' | 'unavailable'
+  state: 'available' | 'stored' | 'missing' | 'deleted' | 'unavailable'
 }
 export interface VideoDetail extends LibraryVideo {
   description: string

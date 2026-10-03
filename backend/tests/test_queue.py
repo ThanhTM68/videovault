@@ -139,6 +139,8 @@ def controlled(queue: QueueService, settings: Settings, media: Path, tmp_path: P
         (S.RESOLVING, S.DOWNLOADING),
         (S.DOWNLOADING, S.PROCESSING),
         (S.PROCESSING, S.COMPLETED),
+        (S.PROCESSING, S.UPLOADING),
+        (S.UPLOADING, S.COMPLETED),
         (S.DOWNLOADING, S.FAILED),
         (S.PROCESSING, S.CANCELLED),
     ],
@@ -155,7 +157,7 @@ def test_allowed_transitions(source: S, target: S) -> None:
         (S.FAILED, S.COMPLETED),
         (S.QUEUED, S.COMPLETED),
         (S.RESOLVING, S.PROCESSING),
-        (S.PROCESSING, S.UPLOADING),
+        (S.DOWNLOADING, S.UPLOADING),
         (S.QUEUED, S.SKIPPED_DUPLICATE),
         (S.FAILED, S.QUEUED),
     ],
@@ -458,16 +460,17 @@ def test_failure_isolation_and_sanitized_error(
             wait_status(queue, jobs[1].id, S.COMPLETED)
             assert failed.error.code == "INTERNAL_SERVER_ERROR"
             assert "secret-token" not in failed.model_dump_json() + caplog.text
-            # Equal submission timestamps are ordered by UUID, not input position.
-            failed_path = next(path for path in adapter.paths if "-bad_" in path.name)
-            successful_path = next(path for path in adapter.paths if "-good_" in path.name)
-            assert not failed_path.parent.exists()
-            assert not successful_path.parent.exists()
             with queue.sessions() as session:
                 media = session.query(MediaFile).one()
                 assert queue.library.files.exists(media.storage_key)
         finally:
             assert manager.stop()
+        # Completion commits before successful TEMP cleanup; join the worker first.
+        # Equal submission timestamps are ordered by UUID, not input position.
+        failed_path = next(path for path in adapter.paths if "-bad_" in path.name)
+        successful_path = next(path for path in adapter.paths if "-good_" in path.name)
+        assert not failed_path.parent.exists()
+        assert not successful_path.parent.exists()
 
 
 def test_persisted_payload_revalidated_and_credentials_not_saved(queue: QueueService) -> None:
@@ -599,7 +602,7 @@ def test_api_submission_poll_cancel_retry_pause_and_resume(
         {"urls": []},
         {"urls": [URL] * 101},
         {"urls": [URL], "max_height": 1081},
-        {"urls": [URL], "storage_target": "google_drive"},
+        {"urls": [URL], "storage_target": "unsupported"},
         {"urls": [URL], "force": "true"},
         {"urls": [URL], "command": "unsafe"},
         {"urls": [URL, "file:///private"]},
