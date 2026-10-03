@@ -15,7 +15,7 @@ from app.application import create_app
 from app.core.config import Settings
 from app.core.errors import ConflictError
 from app.db.session import create_session_factory
-from app.models import Job
+from app.models import Job, MediaFile
 from app.models.enums import JobStatus as S
 from app.models.enums import Platform
 from app.repositories.jobs import JobRepository
@@ -423,7 +423,7 @@ def test_cancel_racing_validated_return_discards_before_ack(
     finish = queue.finish
 
     def race(claim, **kwargs):
-        if not kwargs:
+        if kwargs.get("on_completed"):
             queue.cancel(claim.id)
         return finish(claim, **kwargs)
 
@@ -462,7 +462,10 @@ def test_failure_isolation_and_sanitized_error(
             failed_path = next(path for path in adapter.paths if "-bad_" in path.name)
             successful_path = next(path for path in adapter.paths if "-good_" in path.name)
             assert not failed_path.parent.exists()
-            assert successful_path.parent.exists()
+            assert not successful_path.parent.exists()
+            with queue.sessions() as session:
+                media = session.query(MediaFile).one()
+                assert queue.library.files.exists(media.storage_key)
         finally:
             assert manager.stop()
 
@@ -597,7 +600,7 @@ def test_api_submission_poll_cancel_retry_pause_and_resume(
         {"urls": [URL] * 101},
         {"urls": [URL], "max_height": 1081},
         {"urls": [URL], "storage_target": "google_drive"},
-        {"urls": [URL], "force": True},
+        {"urls": [URL], "force": "true"},
         {"urls": [URL], "command": "unsafe"},
         {"urls": [URL, "file:///private"]},
         {"urls": ["https://user:password@youtube.com/watch?v=id"]},

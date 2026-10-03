@@ -150,7 +150,8 @@ executing attempts; heartbeat failure signals their stop, never starts a concurr
 Shutdown stops claims, signals cancellation, and uses a five-second thread join budget
 (an outstanding short SQLite operation also has a finite lock timeout). A blocked daemon
 keeps the supervisor/engine until it exits; forced termination relies on restart recovery.
-Completed output remains temporary, without video/history/media/storage writes.
+Phase 05 originally left completed output temporary; Phase 07 extends this lifecycle
+with durable files and transactional media/history writes as described below.
 
 ## Phase 06 frontend boundaries
 
@@ -174,6 +175,38 @@ not terminal status. Unknown/reset progress (null or zero) is indeterminate.
 POST /videos/resolve delegates through PreviewService to the existing downloader
 resolver and projects public metadata only, with no media download or DB writes.
 These two additive endpoints require no schema or dependency changes.
+
+## Phase 07 library/history boundaries
+
+Library routes handle transport and delegate to LibraryService. LibraryRepository owns
+Video/Creator upserts, bounded search/filter queries, actual attempt events, MediaFile
+records and history removal; OrganizationRepository owns collection/tag membership.
+LocalFiles isolates managed-root validation, exclusive file copying, unlink and
+streaming SHA-256. This is local file lifecycle support, not a Drive/provider registry.
+
+Workers resolve identity before media transfer. They share 256 bounded striped RLocks
+with destructive library actions, keyed by `(platform, platform_video_id)`; waiting
+workers check their cancellation Event every 100ms. Within the lock a short fenced
+transaction upserts metadata and checks completed history. Normal duplicate work skips;
+force starts another attempt. The lock spans download/finalization/completion, so two
+normal jobs for one identity produce one transfer and one skip. Stripe collisions may
+serialize unrelated videos; different identities never dedup by equal bytes. This is
+strictly one backend process, not a distributed or multi-process guarantee.
+
+No DB session remains open across media I/O, copying, hashing or file deletion.
+After finalization, MediaFile + completed Download + current uncancelled Job commit
+atomically. Exceptions/cancellation clean only owned new files and temporary workspaces.
+Filesystem and SQLite cannot share a transaction: abrupt crashes/cleanup failures can
+leave orphans; failed multi-file deletion can make partial progress but does not erase
+history until all file removals succeed. No automatic root sweeping is introduced.
+
+Reads do not wait for the entire download lock. Page/detail snapshots check managed
+file presence after closing their read session and reconcile changed missing markers
+in a short write. SQL file filtering uses last-known state. Public projections exclude
+absolute paths/storage keys. Preview reports known DB flags but never creates history
+or metadata. Library and History Pinia stores own typed transport, aborted/stale read
+suppression, cached results and explicit actions; components show confirmations and
+server state. They add no polling timer. Existing Queue/Dashboard polling remains shared.
 
 ## Error categories
 

@@ -21,9 +21,11 @@ import HomeView from './views/HomeView.vue'
         ><RouterLink to="/queue" active-class="nav-active"
           ><span aria-hidden="true">≡</span>Queue</RouterLink
         >
+        <RouterLink to="/library" active-class="nav-active">Library</RouterLink>
+        <RouterLink to="/history" active-class="nav-active">History</RouterLink>
         <p class="nav-label">Coming later</p>
         <span
-          v-for="name in ['Library', 'History', 'Editor', 'Storage & Settings']"
+          v-for="name in ['Editor', 'Storage & Settings']"
           :key="name"
           class="nav-disabled"
           aria-disabled="true"

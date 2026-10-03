@@ -12,6 +12,16 @@ const mountForm = () =>
     global: { plugins: [createPinia()], stubs: { RouterLink: { template: '<a><slot /></a>' } } },
   })
 describe('Quick Download', () => {
+  it('submits explicit force redownload without changing the download API', async () => {
+    vi.mocked(api.submitDownloads).mockResolvedValue({ jobs: [{ id: 'forced', status: 'queued' }] })
+    const wrapper = mountForm()
+    await wrapper.get('textarea').setValue('https://youtube.com/watch?v=a')
+    await wrapper.findAll('input[type="checkbox"]')[1].setValue(true)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.submitDownloads).toHaveBeenCalledWith(expect.objectContaining({ force: true }))
+    wrapper.unmount()
+  })
   beforeEach(() => {
     vi.mocked(api.submitDownloads).mockReset()
     vi.mocked(api.resolvePreview).mockReset()

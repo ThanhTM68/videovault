@@ -28,3 +28,6 @@ class VideoPreview(DomainModel):
     width: int | None
     height: int | None
     thumbnail_url: str | None
+    video_id: str | None = None
+    has_file: bool = False
+    has_download_history: bool = False

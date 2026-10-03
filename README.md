@@ -109,11 +109,12 @@ will be designed in the release phase. `npm run preview` has no API proxy.
 Phases 03–04 add the internal download engine and five platform adapters, isolated yt-dlp
 integration, capped format selection, temporary downloads, and ffprobe validation.
 Phase 05 adds durable download submission, polling, cancellation, retry and pause/resume
-APIs with a SQLite queue and in-process workers. Outputs remain temporary; history,
-dedup and storage/library integration are deferred.
+APIs with a SQLite queue and in-process workers.
 Phase 06 adds Dashboard, Quick Download and Queue, with typed API calls, optional
 single-video metadata preview, job progress/actions and authoritative pause state.
-The next planned phase is **Phase 07 — Library, History & Dedup**.
+Phase 07 adds a durable local Library, download-event History, identity dedup,
+force redownload, collections, personal tags and distinct file/history deletion.
+The next planned phase is **Phase 08 — Storage Providers & Google Drive**.
 
 ### Frontend workflow
 
@@ -121,7 +122,8 @@ Open Quick Download, paste 1–100 URLs (one per line), choose a maximum height
 (1080p by default), container and audio setting, then create jobs. Blank lines and
 identical repeated lines are removed within the paste; this does not check history.
 Preview is optional and available for one URL. Missing metadata/thumbnail is normal.
-Storage and force controls are deferred; successful outputs remain temporary.
+Force redownload is optional and defaults off. Preview reports actual known history
+and file presence; preview itself creates no Video, Download or Job records.
 
 Queue shows paginated jobs, status filters, progress, timestamps and safe errors.
 Cancel queued/running jobs; running cancellation waits for worker acknowledgement.
@@ -134,6 +136,25 @@ ten seconds when idle or unavailable. Global counts refresh every ten seconds an
 after actions/manual refresh; separate queries may briefly reflect different moments.
 Navigation stops polling. Failed reads preserve loaded data and offer Refresh.
 The connection indicator offers a health retry when the backend is unavailable.
+
+Library supports title/creator search, platform/file/history/tag/collection filters
+and paginated results. Details show managed file state, SHA-256 and recent download
+events. History lists actual execution attempts, including forced, failed and cancelled
+attempts. Normal duplicates remain Queue jobs with `skipped_duplicate` and do not
+fabricate download events. Library/History refresh on entry or explicit Refresh; errors
+keep loaded data. Reload restores the server's persisted records.
+
+Normal downloads skip videos with successful history for the same `(platform,
+platform_video_id)`, even if the file was deleted or went missing. Force queues another
+real attempt and preserves older files. Delete file removes all active managed files
+while keeping history; Remove history keeps files and permits normal download again.
+Delete everything removes files and history, with a stronger typed DELETE confirmation.
+All three preserve video metadata, personal tags and collection membership.
+
+Personal tags normalize whitespace and case; source hashtags remain source metadata.
+Collections and tags can be created, attached and removed from a video. Filters use
+last-known file presence; viewing a page/detail reconciles the files it checks. There
+is no automatic full-root rescan, orphan sweeping, media-serving or Drive integration.
 
 ### Backend foundation configuration
 
@@ -207,7 +228,8 @@ commit/rollback. The request dependency closes sessions and rolls back unfinishe
 ### Persistent queue (Phase 05)
 
 Run `alembic upgrade head` before starting the app (including existing Phase 02 databases:
-0002_queue is additive). Use one backend process; multiple uvicorn workers are unsupported.
+0002_queue and 0003_library are additive). Use one backend process; multiple uvicorn
+workers are unsupported. Back up existing databases before migration rollback.
 The app starts DOWNLOAD_CONCURRENCY worker threads (default 3) after stale-job recovery.
 Submission validates the entire batch before one commit and returns quickly without
 waiting for network/media operations:
@@ -220,8 +242,9 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/jobs/$jobId"
 ```
 
 Replace the example with public content you are authorized to store. Submit 1..100 URLs;
-container defaults to mp4 and audio to true. Only storage_target=local and force=false
-are accepted. Here local means existing TEMP_STORAGE_ROOT output, not a permanent library.
+container defaults to mp4 and audio to true. Only storage_target=local is accepted.
+force is a strict boolean, default false. Validated media is copied from TEMP_STORAGE_ROOT
+to unique durable files beneath LOCAL_STORAGE_ROOT before a job can become completed.
 The 202 response is {jobs:[{id,status:"queued"}]}; poll GET jobs/{id} or GET jobs (optional
 status/type/page/page_size). Jobs exclude URLs, internal payloads and result paths.
 
@@ -241,9 +264,10 @@ Graceful shutdown stops claims, signals cancellation and joins for up to 5 secon
 blocked daemons retain supervision/DB ownership until they return. A pending short DB
 operation also has SQLite's finite lock timeout. Forced termination uses recovery.
 
-Completed media stays in checked UUID temporary directories. No job output-path API,
-permanent storage or history entry is implemented yet. Process crashes may leave orphaned
-temporary workspaces; garbage collection is deferred. No live-site tests are required;
+Completed media has a streamed SHA-256 and linked MediaFile/Download rows; these commit
+atomically with the fenced Job completion. Temporary output is then consumed. Process
+crashes or failed filesystem cleanup may leave orphaned files; sweeping is deferred.
+Public APIs exclude absolute file paths. No live-site tests are required;
 queue tests exercise real validation with generated media and controlled fake adapters.
 
 ### Download engine and platform adapters (Phases 03–04)

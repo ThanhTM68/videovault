@@ -11,6 +11,7 @@ export interface DownloadSubmissionRequest {
   max_height: 1080 | 720 | 480
   preferred_container: 'mp4' | 'mkv' | 'webm'
   audio_enabled: boolean
+  force?: boolean
 }
 
 export interface DownloadSubmissionResponse {
@@ -31,4 +32,7 @@ export interface VideoPreview {
   width: number | null
   height: number | null
   thumbnail_url: string | null
+  video_id?: string | null
+  has_file?: boolean
+  has_download_history?: boolean
 }

@@ -30,6 +30,9 @@ def settings(tmp_path: Path) -> Settings:
         _env_file=None,
         app_env="test",
         database_url="sqlite:///" + (tmp_path / "test.db").as_posix(),
+        local_storage_root=tmp_path / "library",
+        temp_storage_root=tmp_path / "temp",
+        thumbnail_storage_root=tmp_path / "thumbnails",
     )
 
 

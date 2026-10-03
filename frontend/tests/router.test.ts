@@ -7,12 +7,14 @@ it('resolves core views and redirects unknown paths without fake feature routes'
     ['/', 'dashboard'],
     ['/download', 'download'],
     ['/queue', 'queue'],
+    ['/library', 'library'],
+    ['/history', 'history'],
   ]) {
     await router.push(path)
     expect(router.currentRoute.value.name).toBe(name)
   }
   await router.push('/dashboard')
   expect(router.currentRoute.value.name).toBe('dashboard')
-  await router.push('/library')
+  await router.push('/unknown-feature')
   expect(router.currentRoute.value.name).toBe('dashboard')
 })

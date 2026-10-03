@@ -16,9 +16,12 @@ Uses existing download URL validation and identity-query sanitation. Invalid inp
 returns 422; resolve failures use the existing safe domain error envelope.
 
 Returns platform, platform_video_id, canonical_url, title, creator, duration_seconds,
-width, height and thumbnail_url; metadata fields may be null. No raw extractor data,
-filesystem paths, formats, credentials or downloaded-state summary is returned.
-The service calls the existing resolver without downloading media or writing jobs.
+width, height and thumbnail_url; metadata fields may be null. Phase 07 adds nullable
+video_id, has_file and has_download_history, derived from actual persisted identity and
+managed file checks. Unknown identity returns null/false/false. No raw extractor data,
+filesystem paths, formats or credentials are returned. The service resolves metadata
+without downloading media or creating Video/Download/Job records; it may reconcile
+missing-file markers for an existing video.
 
 ## Download
 Phase 05 implements submission only. POST returns 202 after an atomic durable commit.
@@ -27,8 +30,8 @@ Body is strict (unknown fields rejected):
 - max_height: optional integer 1..1080; defaults to DOWNLOAD_MAX_HEIGHT
 - preferred_container: mp4 (default), mkv or webm
 - audio_enabled: strict boolean, default true
-- storage_target: local only; this means existing temporary output, not permanent storage
-- force: false only; force/dedup and Drive values fail validation (422)
+- storage_target: local only; Phase 07 finalizes validated output beneath LOCAL_STORAGE_ROOT
+- force: strict boolean, default false; true bypasses successful-history dedup
 
 Malformed input returns 422; unsupported platform/URL form returns the existing domain
 error (400). Either failure creates no jobs. Submitted URLs retain identity queries only.
@@ -37,8 +40,10 @@ No network resolution occurs before submission returns. Response:
 {"jobs":[{"id":"uuid","status":"queued"}]}
 ```
 Response describes submission state; polling may already show running work. Duplicate
-URLs create separate jobs; no history/dedup decisions are made. GET downloads/{id} and
-the broader behavior below remain planned; use GET jobs/{id} in Phase 05.
+URLs create separate jobs. Dedup decisions occur after worker resolution, never in the
+submission handler. A normal successful-history duplicate becomes skipped_duplicate;
+it creates no Download or MediaFile. Force executes a real new attempt and preserves
+older media. GET downloads/{id} remains planned; use GET jobs/{id}.
 
 Planned broader contract:
 POST `/downloads`
@@ -82,37 +87,76 @@ Progress delivery:
 - optional WebSocket/SSE can be added in Phase 05 if cleanly implemented
 
 ## Library
-GET `/videos`
-GET `/videos/{id}`
-PATCH `/videos/{id}`
-DELETE `/videos/{id}/file`
-DELETE `/videos/{id}/history`
-DELETE `/videos/{id}/all`
-POST `/videos/{id}/redownload`
+Implemented in Phase 07:
+
+- GET `/videos`: page >=1, page_size 1..100 (default 25); search (title/creator,
+  literal escaped LIKE, max 255), platform, has_file, has_download_history, tag_id,
+  collection_id. Returns items/page/page_size/total, newest discovered first then id.
+- GET `/videos/{id}`: Video metadata plus personal tags/collections, files and up to
+  100 recent history events. Public file fields: id, size_bytes, sha256, container,
+  width, height, state (available/missing/deleted/unavailable). No storage keys or
+  local paths. has_file means an actually present active local file; has_download_history
+  means at least one completed Download, irrespective of file presence.
+- DELETE `/videos/{id}/file`: remove all active managed local files, mark deleted_at;
+  preserve events. Missing files are idempotently marked deleted.
+- DELETE `/videos/{id}/history`: hard-delete all this video's Download events;
+  preserve files (download_id becomes NULL) and permit normal downloading again.
+- DELETE `/videos/{id}/all`: delete files first, then history. All paths are validated
+  before any unlink. A failed unlink preserves history; already deleted files remain
+  accurately marked and retry can finish. Video/tag/collection records remain.
+- POST `/videos/{id}/redownload`: no body; 202 with queued job IDs. Uses stored safe
+  source URL, configured maximum height, mp4/audio defaults and force=true. No direct
+  media operation in the route. Missing video returns 404; unsafe source 409.
+
+Destructive routes return the updated Video detail, not a fabricated deletion count.
+File filters use last-known DB missing/deleted markers; page/detail reads check actual
+file presence and reconcile changed markers. There is no full managed-root scan.
+PATCH video metadata and media streaming/open routes remain unimplemented.
+
+## History
+GET `/history`: page >=1, page_size 1..100 (default 25), platform and Download status
+(queued/resolving/downloading/processing/uploading/completed/failed/cancelled/
+skipped_duplicate). Returns actual
+Download events newest first then id with video_id/title/platform, job_id, nullable
+attempt_number, requested_quality, forced, timestamps and safe failure_code/message.
+The worker only creates downloading/completed/failed/cancelled events; duplicate jobs
+have none. requested_quality contains compact JSON options for new attempts; legacy
+strings are preserved. Identity dedup queries completed events only.
 
 ## Collections
+Implemented in Phase 07. Named lists return at most 1000 {id,name} objects.
+Create accepts strict {name}, trims/collapses whitespace, rejects empty/over-255 input,
+returns 201 {id,name}. Collection names may repeat; identities are distinct IDs.
+Membership mutations are idempotent and return updated detail; missing resources 404.
 GET/POST `/collections`
 POST `/collections/{id}/videos/{video_id}`
 DELETE `/collections/{id}/videos/{video_id}`
 
 ## Tags
+Implemented in Phase 07 with the same strict create/list shape. Personal tag names
+additionally casefold; repeated normalized creation returns the existing tag (201).
+Membership uniqueness is enforced by composite primary keys. Source hashtags are not
+automatically personal tags. Removing membership does not delete the tag itself.
 GET/POST `/tags`
 POST `/videos/{id}/tags/{tag_id}`
 DELETE `/videos/{id}/tags/{tag_id}`
 
 ## Storage
+Planned Phase 08, not implemented.
 GET `/storage/providers`
 GET `/storage/status`
 
 Google Drive connection routes are introduced only in Phase 08.
 
 ## Batch
+Planned Phase 09, not implemented.
 POST `/sources/resolve`
 POST `/sources/batch-download`
 
 Input must express requested sorting/filtering, while adapter reports supported capabilities.
 
 ## Editor
+Planned Phase 10, not implemented.
 POST `/editor/jobs`
 GET `/editor/presets`
 POST `/editor/presets`

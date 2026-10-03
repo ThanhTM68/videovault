@@ -50,7 +50,7 @@ def create_app(
     application.state.engine = engine
     application.state.session_factory = sessions
     application.state.worker_manager = manager
-    application.state.preview_service = PreviewService(queue.downloader)
+    application.state.preview_service = PreviewService(queue.downloader, queue.library)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.frontend_origin],
