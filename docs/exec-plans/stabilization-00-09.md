@@ -205,9 +205,47 @@ no regex warning/page error remains. All owned demo servers stopped and ports800
 
 Final staged artifact/diff scan PASS:34intended text files; no media/DB/cache/logs/
 screenshots/environment files or real secrets. Secret-key matches are only explicit
-known fake test markers. Commit and remote SHA verification are the remaining Git
-steps; do not infer those from test results. Checklist retains historical00-09[x]
-and future10-14[ ]. Phase10 awaits user demo review.
+known fake test markers. Implementation commit
+`fb2ece54feb7d19a61406e6acf751edd1140f248` exists, was pushed only to
+`stabilize/00-09-demo`, fetched, and matched the complete remote SHA with a clean
+working tree. This follow-up records that evidence; its final head will be fetched
+and compared again after the documentation commit. No merge or Phase10 work.
+
+## Final acceptance record
+
+| Real browser workflow | Result | Evidence |
+|---|---|---|
+| Navigation | PASS | Three loops over seven routes; reload and back/forward |
+| Dashboard | PASS | Counts/recent jobs load; one polling owner |
+| Quick Download | PASS | Preview/options/real job/media/hash/event |
+| Queue | PASS | Status filters, pages, details, refresh and actions |
+| Queue after completion | PASS | 31s/three idle intervals; 100% and responsive controls |
+| Pause / Resume | PASS | Claims pause, active work continues, queued work resumes |
+| Cancel | PASS | Queued and running acknowledgement; no fake successful file/event |
+| Retry | PASS | Same job attempt2; failed/completed events preserved |
+| Library | PASS | Search/all filters, pagination, details and last-page recovery |
+| History | PASS | Actual success/failure/forced events, status/platform/pages |
+| Dedup | PASS | Skip creates no extra transfer/media/history event |
+| Force | PASS | New file/event, original file and hash preserved |
+| Delete file | PASS | Physical removal, history retained, normal duplicate still skipped |
+| Remove history | PASS | Files kept; normal download executes again |
+| Delete everything | PASS | Confirmation; files/history removed, metadata/organization kept |
+| Tags | PASS | Create/attach/filter/reload/remove; concurrent writer succeeds |
+| Collections | PASS | Create/attach/filter/reload/remove persists |
+| Storage Local | PASS | Real local media; no Drive connection needed |
+| Storage without Drive configuration | PASS | Documented stock app startup; Local available, Drive disabled |
+| Batch | PASS | Handle/channel, limits/filters, Local/fake Drive, history/Force/cache |
+| Offline / Recovery | PASS | Actual offline snapshot/busy cleanup/controller recovery |
+| Backend restart | PASS | Persisted views, cache invalidation, stale/cancel/exhausted recovery |
+| Responsive 390px | PASS | Seven routes, long titles, details/hash; no horizontal overflow |
+
+Frontend restart after clean npm install, browser-only pattern regression, provider
+permission faults/partial-deletion reconciliation and double-click submission also PASS.
+Final senior reviews, all automated checks, documentation, artifact and implementation
+commit gates PASS. Verdict: **DEMO READY** for the documented deterministic application
+demo, with live-site/real-Google limitations below. Checklist inspected: historical
+Phases00-09 remain[x] from their committed evidence; Phases10-14 remain[ ]. No checklist
+change is needed. Phase10 awaits user demo review and has not started.
 
 ### External limitations
 
