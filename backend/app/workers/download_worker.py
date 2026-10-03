@@ -2,6 +2,7 @@ import logging
 import time
 import traceback
 from collections.abc import Callable
+from contextlib import ExitStack
 from threading import Event
 
 from pydantic import ValidationError
@@ -69,9 +70,12 @@ def execute_download(queue: QueueService, claim: Claim, cancellation: Event) -> 
     cancelled = False
     error_code = None
     error_message = None
+    leases = ExitStack()
     try:
         payload = DownloadPayload.model_validate(claim.payload)
-        request = queue.downloader.prepare_request(**payload.model_dump(exclude={"force"}))
+        request = queue.downloader.prepare_request(
+            **payload.model_dump(exclude={"force", "storage_target"})
+        )
         if cancellation.is_set():
             raise DownloadCancelledError()
         metadata = queue.downloader.resolve(request.url)
@@ -91,7 +95,13 @@ def execute_download(queue: QueueService, claim: Claim, cancellation: Event) -> 
                 raise ConflictError("Source identity changed during download")
             if cancellation.is_set():
                 raise DownloadCancelledError()
-            finalized = queue.library.files.finalize(result, cancellation)
+            leases.enter_context(queue.storage.operation(payload.storage_target, cancellation))
+            finalized = queue.storage.put(
+                payload.storage_target,
+                result,
+                cancellation,
+                lambda percent: queue.progress(claim, S.UPLOADING, "uploading", percent),
+            )
             if not cancellation.is_set():
                 keep = queue.finish(
                     claim,
@@ -113,8 +123,9 @@ def execute_download(queue: QueueService, claim: Claim, cancellation: Event) -> 
     finally:
         if finalized is not None and not keep:
             try:
-                queue.library.files.delete(finalized.key)
+                queue.storage.delete(finalized.provider, finalized.key)
             except Exception as exc:
+                logger.warning("Storage orphan possible: completion compensation failed")
                 log_failure(exc)
         if result is not None:
             try:
@@ -122,10 +133,13 @@ def execute_download(queue: QueueService, claim: Claim, cancellation: Event) -> 
             except Exception as exc:
                 log_failure(exc)
         # Acknowledge failures/cancellation only after owned output cleanup finishes.
-        if not keep and (result is not None or error_code or cancelled):
-            queue.finish(
-                claim,
-                error_code=error_code,
-                error_message=error_message,
-                cancelled=cancelled or cancellation.is_set() or not error_code,
-            )
+        try:
+            if not keep and (result is not None or error_code or cancelled):
+                queue.finish(
+                    claim,
+                    error_code=error_code,
+                    error_message=error_message,
+                    cancelled=cancelled or cancellation.is_set() or not error_code,
+                )
+        finally:
+            leases.close()

@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.errors import ConflictError, NotFoundError
 from app.db.base import utc_now
 from app.models import Download, Video
-from app.models.enums import StorageProvider
 from app.repositories.jobs import JobRepository
 from app.repositories.library import LibraryRepository, OrganizationRepository
 from app.schemas.library import (
@@ -22,16 +21,17 @@ from app.schemas.library import (
 )
 from app.services.downloader.cancellation import DownloadCancelledError
 from app.services.downloader.models import NormalizedVideo
-from app.services.library.files import LocalFiles
 from app.services.library.locks import identity_lock
 from app.services.queue.models import Claim, DownloadPayload
+from app.services.storage.service import StorageService
 
 logger = logging.getLogger(__name__)
 
 
 class LibraryService:
-    def __init__(self, sessions: sessionmaker[Session], files: LocalFiles) -> None:
-        self.sessions, self.files = sessions, files
+    def __init__(self, sessions: sessionmaker[Session], storage: StorageService) -> None:
+        self.sessions, self.storage = sessions, storage
+        self.files = storage.local  # Compatibility accessor for existing internal local tests.
 
     def identity(self, video_id: str) -> tuple[str, str]:
         with self.sessions() as session:
@@ -92,7 +92,7 @@ class LibraryService:
             ],
         )
 
-    def detail(self, video_id: str) -> VideoDetail:
+    def detail(self, video_id: str, *, verify_remote: bool = False) -> VideoDetail:
         self.identity(video_id)
         with self.sessions() as session:
             repository = LibraryRepository(session)
@@ -107,16 +107,20 @@ class LibraryService:
         for record in records:
             if record.deleted_at is not None:
                 state = "deleted"
-            elif record.storage_provider != StorageProvider.LOCAL:
-                state = "unavailable"
             else:
-                present = self.files.exists(record.storage_key)
-                state = "available" if present else "missing"
-                if (record.missing_at is not None) == present:
+                state, present = self.storage.file_state(
+                    record.storage_provider,
+                    record.storage_key,
+                    record.missing_at is not None,
+                    verify_remote=verify_remote,
+                )
+                if present is not None and (record.missing_at is not None) == present:
                     changes.append((record.id, not present))
             files.append(
                 FileSummary(
                     id=record.id,
+                    storage_provider=record.storage_provider,
+                    file_name=record.file_name.replace("\\", "/").rsplit("/", 1)[-1],
                     size_bytes=record.size_bytes,
                     sha256=record.sha256,
                     container=Path(record.file_name).suffix.lstrip("."),
@@ -129,7 +133,10 @@ class LibraryService:
             with self.sessions.begin() as session:
                 LibraryRepository(session).reconcile(changes)
         return VideoDetail(
-            **{**summary.model_dump(), "has_file": any(f.state == "available" for f in files)},
+            **{
+                **summary.model_dump(),
+                "has_file": any(f.state in {"available", "stored"} for f in files),
+            },
             description=description,
             history=history,
             files=files[:100],
@@ -167,11 +174,9 @@ class LibraryService:
                 active = [record for record in records if record.deleted_at is None]
                 # Validate every target before deleting any. DB paths are untrusted.
                 for record in active:
-                    if record.storage_provider != StorageProvider.LOCAL:
-                        raise ConflictError("Only managed local files can be deleted")
-                    self.files.path(record.storage_key)
+                    self.storage.validate_delete(record.storage_provider, record.storage_key)
                 for record in active:
-                    self.files.delete(record.storage_key)
+                    self.storage.delete(record.storage_provider, record.storage_key)
                     with self.sessions.begin() as session:
                         LibraryRepository(session).mark_deleted(record.id)
             if operation in {"history", "all"}:

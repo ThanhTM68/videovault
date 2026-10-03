@@ -395,7 +395,9 @@ def test_api_search_filters_organization_actions_and_privacy(library_queue, sett
         assert client.get("/api/v1/videos?page_size=1&page=2").json()["items"] == []
         assert client.get("/api/v1/videos?page_size=101").status_code == 422
         detail = client.get(f"/api/v1/videos/{video_id}").json()
-        assert "storage_key" not in str(detail) and "file_name" not in str(detail)
+        assert "storage_key" not in str(detail)
+        assert all(item["storage_provider"] == "local" for item in detail["files"])
+        assert all("/" not in item["file_name"] for item in detail["files"])
         assert str(settings.local_storage_root) not in str(detail)
         assert client.get("/api/v1/history?status=completed&platform=youtube").json()["total"] == 1
         assert client.post(f"/api/v1/videos/{video_id}/redownload").status_code == 202

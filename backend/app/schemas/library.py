@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 from pydantic import Field, field_validator
 
-from app.models.enums import DownloadStatus, Platform
+from app.models.enums import DownloadStatus, Platform, StorageProvider
 from app.services.downloader.models import DomainModel
 
 
@@ -60,6 +60,8 @@ class HistoryItem(DomainModel):
 
 class FileSummary(DomainModel):
     id: str
+    storage_provider: StorageProvider
+    file_name: str
     size_bytes: int
     sha256: str | None
     container: str

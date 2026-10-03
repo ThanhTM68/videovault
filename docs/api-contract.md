@@ -30,7 +30,7 @@ Body is strict (unknown fields rejected):
 - max_height: optional integer 1..1080; defaults to DOWNLOAD_MAX_HEIGHT
 - preferred_container: mp4 (default), mkv or webm
 - audio_enabled: strict boolean, default true
-- storage_target: local only; Phase 07 finalizes validated output beneath LOCAL_STORAGE_ROOT
+- storage_target: local or google_drive; omitted uses STORAGE_PROVIDER (local default)
 - force: strict boolean, default false; true bypasses successful-history dedup
 
 Malformed input returns 422; unsupported platform/URL form returns the existing domain
@@ -141,12 +141,37 @@ GET/POST `/tags`
 POST `/videos/{id}/tags/{tag_id}`
 DELETE `/videos/{id}/tags/{tag_id}`
 
-## Storage
-Planned Phase 08, not implemented.
-GET `/storage/providers`
-GET `/storage/status`
+## Storage - Phase 08
 
-Google Drive connection routes are introduced only in Phase 08.
+GET `/storage`: `{default_target, providers:[{provider, configured, connected, available,
+display_name, account_id, root_folder_id, error_code}]}`. Local snapshot, no Google I/O;
+no tokens, client secrets, storage paths or credential filenames. Availability requires
+connected credentials + root for Drive. It is not a live remote-health assertion.
+
+POST `/storage/google-drive/connect` with `{}` returns `{authorization_url}` using
+one-use state and PKCE. POST `/storage/google-drive/disconnect` with `{}` returns
+StorageStatus; clears local credentials only and retains records/media.
+GET `/storage/google-drive/callback?state=...&code=...` exchanges on backend, returns
+303 to configured frontend `/storage?drive=connected` or `drive=error&reason=SAFE_CODE`.
+No-store/referrer-policy protect the callback; raw code/token is never returned.
+PUT `/storage/google-drive/root` with `{folder_id}` validates and selects a writable,
+nontrashed accessible folder. POST same path with `{}` creates/reuses VideoVault (201).
+Both return `{id,name}`; no broad folder browser or Picker.
+
+POST `/videos/{video_id}/refresh-files` returns VideoDetail after targeted provider
+existence checks. FileSummary adds `storage_provider` and `file_name` (basename).
+States: available (checked), stored (Drive last-known), missing, deleted, unavailable.
+Auth/network errors never mark remote files missing. Normal Library/preview reads do
+not contact Drive. Existing delete routes dispatch through the provider; partial
+failure preserves successful deletion markers and all history until every file succeeds.
+
+Submission locally validates selected provider without upload/network I/O. Invalid enum
+is 422; unconfigured/disconnected/root-unset Drive is safe HTTP 400. Stable storage
+codes include STORAGE_NOT_CONFIGURED, STORAGE_NOT_CONNECTED, STORAGE_ROOT_INVALID,
+STORAGE_UNAVAILABLE, STORAGE_PERMISSION_DENIED, STORAGE_UPLOAD_FAILED,
+STORAGE_DELETE_FAILED, STORAGE_KEY_INVALID, STORAGE_UNMANAGED_OBJECT,
+STORAGE_CREDENTIAL_FAILED, STORAGE_ACCOUNT_MISMATCH, STORAGE_ACCOUNT_AMBIGUOUS,
+OAUTH_STATE_INVALID, OAUTH_DENIED, OAUTH_FAILED. Existing generic envelope applies.
 
 ## Batch
 Planned Phase 09, not implemented.

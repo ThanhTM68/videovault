@@ -221,3 +221,16 @@ Examples:
 - ValidationError
 
 Map domain errors to stable API error responses.
+
+## Phase 08 provider boundary
+
+StorageService owns a provider registry and put/exists/delete/get_metadata dispatch.
+LocalStorageProvider preserves managed-root path checks. GoogleDriveStorageProvider
+owns folder/upload/metadata/deletion; DriveConnection owns official SDK OAuth and
+private credential files. StorageAccountRepository handles non-secret persistence.
+Routes only adapt requests/responses. Downloader/adapters never see Google APIs.
+Worker chooses storage after probe, retaining account lease through atomic completion
+and compensation. Reads/submission use local snapshots without waiting for upload.
+Library deletion is provider-neutral; remote list state is cached and explicit targeted
+refresh runs outside DB transactions. Storage Pinia owns configuration/actions; no new
+polling timer, cloud queue or multi-process coordination is introduced.

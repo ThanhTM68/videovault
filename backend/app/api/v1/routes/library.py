@@ -49,6 +49,11 @@ def video_detail(video_id: str, service: Library) -> VideoDetail:
     return service.detail(video_id)
 
 
+@router.post("/videos/{video_id}/refresh-files", response_model=VideoDetail)
+def refresh_files(video_id: str, service: Library) -> VideoDetail:
+    return service.detail(video_id, verify_remote=True)
+
+
 @router.get("/history", response_model=HistoryPage)
 def history(
     service: Library,
@@ -84,6 +89,7 @@ def redownload(video_id: str, service: Library, request: Request) -> SubmissionR
                 url=service.source(video_id),
                 max_height=request.app.state.settings.download_max_height,
                 force=True,
+                storage_target=request.app.state.settings.storage_provider,
             )
         ]
     )

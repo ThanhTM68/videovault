@@ -3,9 +3,11 @@ from ipaddress import ip_address
 from pathlib import Path
 from typing import Literal
 
-from pydantic import AnyHttpUrl, Field, field_validator
+from pydantic import AnyHttpUrl, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
+
+from app.models.enums import StorageProvider
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
@@ -28,6 +30,34 @@ class Settings(BaseSettings):
     download_max_height: int = Field(default=1080, ge=1, le=1080)
     download_concurrency: int = Field(default=3, ge=1)
     frontend_origin: str = "http://127.0.0.1:5173"
+    storage_provider: StorageProvider = StorageProvider.LOCAL
+    google_drive_client_id: str = Field(default="", repr=False)
+    google_drive_client_secret: SecretStr = SecretStr("")
+    google_drive_redirect_uri: str = ""
+    google_drive_root_folder_id: str = ""
+    private_auth_root: Path = REPOSITORY_ROOT / "data/private-auth"
+
+    @field_validator("private_auth_root")
+    @classmethod
+    def normalize_auth_path(cls, value: Path) -> Path:
+        return (REPOSITORY_ROOT / value).absolute()
+
+    @field_validator("google_drive_redirect_uri")
+    @classmethod
+    def validate_callback(cls, value: str) -> str:
+        if not value:
+            return value
+        uri = AnyHttpUrl(value)
+        if (
+            uri.host not in {"127.0.0.1", "localhost", "[::1]"}
+            or uri.path != "/api/v1/storage/google-drive/callback"
+            or uri.query
+            or uri.fragment
+            or uri.username
+            or uri.password
+        ):
+            raise ValueError("Drive redirect must be the local backend callback")
+        return str(uri)
 
     @field_validator("app_host")
     @classmethod

@@ -67,7 +67,7 @@ export const useLibraryStore = defineStore('library', () => {
       if (!controller.signal.aborted) actionError.value = errorMessage(failure)
     }
   }
-  async function action(operation: DeleteOperation | 'force'): Promise<void> {
+  async function action(operation: DeleteOperation | 'force' | 'refresh'): Promise<void> {
     if (!selected.value || busy.value) return
     const id = selected.value.id
     busy.value = true
@@ -78,7 +78,10 @@ export const useLibraryStore = defineStore('library', () => {
         const result = await api.forceRedownload(id)
         notice.value = `${result.jobs.length} redownload job queued. View Queue to follow progress.`
       } else {
-        const result = await api.destroyVideo(id, operation)
+        const result =
+          operation === 'refresh'
+            ? await api.refreshFiles(id)
+            : await api.destroyVideo(id, operation)
         if (selected.value?.id === id) selected.value = result
         await load()
       }

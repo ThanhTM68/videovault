@@ -12,6 +12,7 @@ export interface DownloadSubmissionRequest {
   preferred_container: 'mp4' | 'mkv' | 'webm'
   audio_enabled: boolean
   force?: boolean
+  storage_target?: import('./storage').StorageProvider
 }
 
 export interface DownloadSubmissionResponse {

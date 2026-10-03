@@ -7,8 +7,7 @@ TRANSITIONS = {
     S.QUEUED: frozenset({S.RESOLVING, S.CANCELLED}),
     S.RESOLVING: frozenset({S.DOWNLOADING, S.SKIPPED_DUPLICATE, S.FAILED, S.CANCELLED}),
     S.DOWNLOADING: frozenset({S.PROCESSING, S.FAILED, S.CANCELLED}),
-    S.PROCESSING: frozenset({S.COMPLETED, S.FAILED, S.CANCELLED}),
-    # Reserved for later upload handlers; Phase 05 never enters this state.
+    S.PROCESSING: frozenset({S.UPLOADING, S.COMPLETED, S.FAILED, S.CANCELLED}),
     S.UPLOADING: frozenset({S.COMPLETED, S.FAILED, S.CANCELLED}),
     S.COMPLETED: frozenset(),
     S.FAILED: frozenset(),

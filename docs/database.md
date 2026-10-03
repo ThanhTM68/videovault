@@ -298,3 +298,15 @@ Removing download history may delete/soft-delete the relevant download record
 according to implementation, but must not silently delete the file.
 
 Force download creates a new download event.
+
+## Phase 08 storage compatibility
+
+No schema change or migration: head remains 0003_library. MediaFile.storage_provider selects
+local relative storage_key or opaque Google Drive file ID; existing local keys remain
+valid. SHA-256 derives from local validated bytes. StorageAccount.config_json stores
+only allowed non-secret root_folder_id (or existing local root_path), never tokens.
+The persisted Drive permission ID binds one account; different-account reconnect is
+rejected, including after disconnect, since MediaFile has no account ownership FK.
+Existing identity uniqueness, event history, missing/deleted markers and organization
+semantics remain. Download+MediaFile+Job completion is one short transaction after
+provider success; no transaction spans Google API I/O.

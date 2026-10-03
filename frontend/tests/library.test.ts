@@ -17,6 +17,7 @@ vi.mock('../src/api/library', () => ({
   attachNamed: vi.fn(),
   destroyVideo: vi.fn(),
   forceRedownload: vi.fn(),
+  refreshFiles: vi.fn(),
 }))
 const video: LibraryVideo = {
   id: 'v',
@@ -57,6 +58,8 @@ const detail: VideoDetail = {
   files: [
     {
       id: 'm',
+      storage_provider: 'local',
+      file_name: 'clip.mp4',
       size_bytes: 120,
       sha256: 'a'.repeat(64),
       container: 'mp4',
@@ -105,7 +108,7 @@ describe('Phase 07 library/history UI', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('<img onerror=alert(1)>')
     expect(wrapper.find('img').exists()).toBe(false)
-    expect(wrapper.findAll('article')[0].text()).toContain('File: No file')
+    expect(wrapper.findAll('article')[0].text()).toContain('Stored file: No file')
     expect(wrapper.findAll('article')[1].text()).toContain('No successful history')
     wrapper.unmount()
   })
@@ -289,4 +292,26 @@ describe('Phase 07 library/history UI', () => {
     expect(wrapper.find('[role="alertdialog"]').exists()).toBe(true)
     wrapper.unmount()
   })
+})
+
+it('labels Drive as last-known and performs only an explicit targeted refresh', async () => {
+  const driveDetail: VideoDetail = {
+    ...detail,
+    files: [{ ...detail.files[0], storage_provider: 'google_drive', state: 'stored' }],
+  }
+  vi.mocked(api.fetchDetail).mockResolvedValue(driveDetail)
+  vi.mocked(api.refreshFiles).mockResolvedValue({
+    ...driveDetail,
+    files: [{ ...driveDetail.files[0], state: 'missing' }],
+  })
+  const wrapper = mountPage(LibraryView)
+  await flushPromises()
+  await click(wrapper, 'View details')
+  expect(wrapper.text()).toContain('Google Drive')
+  expect(wrapper.text()).toContain('Stored (last-known)')
+  expect(api.refreshFiles).not.toHaveBeenCalled()
+  await click(wrapper, 'Refresh file availability')
+  expect(api.refreshFiles).toHaveBeenCalledWith('v')
+  expect(wrapper.text()).toContain('missing')
+  wrapper.unmount()
 })

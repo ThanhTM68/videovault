@@ -54,7 +54,8 @@ async function add(kind: 'tags' | 'collections'): Promise<void> {
     </div>
     <p>{{ library.selected.description || 'No description available.' }}</p>
     <p class="muted">
-      Successful history: {{ library.selected.has_download_history ? 'Yes' : 'No' }} · File present:
+      Successful history: {{ library.selected.has_download_history ? 'Yes' : 'No' }} · Stored file
+      (Drive last-known):
       {{ library.selected.has_file ? 'Yes' : 'No' }}
     </p>
     <div class="form-actions">
@@ -100,15 +101,23 @@ async function add(kind: 'tags' | 'collections'): Promise<void> {
       {{ library.notice }} <RouterLink to="/queue">View Queue</RouterLink>
     </p>
     <h3>Managed files</h3>
+    <button class="button-secondary" :disabled="library.busy" @click="library.action('refresh')">
+      Refresh file availability
+    </button>
     <p v-if="!library.selected.files.length" class="muted">No managed media files.</p>
     <div v-for="file in library.selected.files" :key="file.id" class="file-summary">
-      <span class="badge">{{ file.state }}</span> {{ file.container }} · {{ file.width || '?' }} ×
-      {{ file.height || '?' }} · {{ file.size_bytes }} bytes
+      <p>
+        {{ file.storage_provider === 'google_drive' ? 'Google Drive' : 'Local' }} -
+        {{ file.file_name }}
+      </p>
+      <span class="badge">{{ file.state === 'stored' ? 'Stored (last-known)' : file.state }}</span>
+      {{ file.container }} · {{ file.width || '?' }} × {{ file.height || '?' }} ·
+      {{ file.size_bytes }} bytes
       <p class="hash">SHA-256: {{ file.sha256 || 'Unavailable' }}</p>
     </div>
     <p class="muted small">
-      Missing files keep their history. File filters use last-known state; detail checks filesystem
-      presence.
+      Missing files keep their history. Local presence is checked on detail. Drive is last-known;
+      use Refresh file availability to check it explicitly.
     </p>
     <h3>Download history</h3>
     <p v-if="!library.selected.history.length" class="muted">No download history for this video.</p>

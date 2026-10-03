@@ -28,7 +28,12 @@ export function errorMessage(error: unknown): string {
 export async function request<T>(
   path: string,
   validate: (data: unknown) => data is T,
-  options: { method?: 'POST' | 'DELETE'; body?: unknown; signal?: AbortSignal; timeout?: number } = {},
+  options: {
+    method?: 'POST' | 'PUT' | 'DELETE'
+    body?: unknown
+    signal?: AbortSignal
+    timeout?: number
+  } = {},
 ): Promise<T> {
   const timeout = AbortSignal.timeout(options.timeout ?? 10000)
   const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout
