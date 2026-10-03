@@ -6,13 +6,16 @@ export interface ApiErrorEnvelope {
   error: { code: string; message: string; details: Record<string, unknown> }
 }
 
-export interface DownloadSubmissionRequest {
-  urls: string[]
+export interface DownloadOptions {
   max_height: 1080 | 720 | 480
   preferred_container: 'mp4' | 'mkv' | 'webm'
   audio_enabled: boolean
   force?: boolean
   storage_target?: import('./storage').StorageProvider
+}
+
+export interface DownloadSubmissionRequest extends DownloadOptions {
+  urls: string[]
 }
 
 export interface DownloadSubmissionResponse {

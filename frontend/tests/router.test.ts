@@ -9,6 +9,7 @@ it('resolves core views and redirects unknown paths without fake feature routes'
     ['/queue', 'queue'],
     ['/library', 'library'],
     ['/history', 'history'],
+    ['/batch', 'batch'],
   ]) {
     await router.push(path)
     expect(router.currentRoute.value.name).toBe(name)

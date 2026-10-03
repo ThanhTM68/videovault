@@ -174,11 +174,57 @@ STORAGE_CREDENTIAL_FAILED, STORAGE_ACCOUNT_MISMATCH, STORAGE_ACCOUNT_AMBIGUOUS,
 OAUTH_STATE_INVALID, OAUTH_DENIED, OAUTH_FAILED. Existing generic envelope applies.
 
 ## Batch
-Planned Phase 09, not implemented.
-POST `/sources/resolve`
-POST `/sources/batch-download`
+Implemented Phase 09. Routes are relative to `/api/v1` and reject extra body fields.
 
-Input must express requested sorting/filtering, while adapter reports supported capabilities.
+POST `/sources/resolve` (200): `{url,n?,ordering?,min_views?,max_views?,date_from?,date_to?,
+min_duration?,max_duration?}`. URL length 1–2048; N strict integer 1–100 (default 20);
+ordering `source` (default), `newest`, `oldest`, `views`. View bounds are strict
+nonnegative integers; duration bounds finite nonnegative seconds; date bounds exact
+YYYY-MM-DD. Ranges inclusive; low > high is 422. Zero is an explicit bound.
+
+Response: `{preview_id,source,candidates,statistics,ordering}`. Source includes platform,
+source_type=`channel_videos`, nullable source_id/display_name/total_available,
+canonical_url, and seven Boolean capabilities (list_profile_or_channel, sort_newest,
+sort_oldest, sort_views, filter_views, filter_date, filter_duration). Current YouTube
+source adapter supports listing and duration only. Source order means unchanged flat
+extractor order in a bounded window, without a newest or whole-channel guarantee.
+Total_available is null. Supported URL forms and exact limits are in downloader.md.
+
+Candidates: platform, platform_video_id, canonical_url, nullable title/creator/thumbnail_url/
+duration_seconds/upload_date/view_count, has_download_history, has_file (DB last-known,
+no provider network check). Statistics: enumerated_count, rejected_count, duplicate_count,
+metadata_unavailable_count (unknown requested duration), filtered_count, returned_count,
+already_downloaded_count and scan_limit=100. At most 100 raw entries are scanned; N caps
+returned candidates after safe normalization, identity dedup and supported filtering.
+No media downloads, full per-video resolve, Video/Job/Download/MediaFile writes or Google
+calls. No raw extractor formats, URLs with credentials, headers or stream data are exposed.
+
+POST `/sources/batch-download` (202): `{preview_id,selected_ids,max_height?,
+preferred_container?,audio_enabled?,storage_target?,force?}`. Shared download option
+validation/defaults match POST `/downloads`. Selected_ids: 1–100 safe YouTube IDs of
+exactly 11 characters, including repeated selections. Arbitrary URLs/candidate objects
+are rejected. Server verifies membership in its cached preview, canonical URLs, options
+and local provider availability, then rechecks successful identity history in one query.
+One ordinary job per eligible unique identity; all eligible jobs commit atomically.
+
+Response: `{jobs,outcomes,requested_count,created_count,skipped_history_count,
+skipped_duplicate_selection_count}`. Jobs are `{id,status:'queued'}` only. Each selected
+occurrence has `{platform_video_id,outcome,job_id}`; outcome `queued`, `skipped_history`
+or `skipped_duplicate_selection`; job_id null for skips. Force bypasses successful
+history, preserving files; repeated selections still collapse to one job. Worker dedup
+retains race protection. All-history selection returns 202 with zero jobs and truthful
+counts. No submission source enumeration or Google API calls.
+
+Previews are random opaque IDs, bounded to 32 snapshots with ten-minute TTL per backend
+process. Successful submission consumes its preview, including zero-job results.
+Validation/storage/transaction failure retains it for retry; expiry/restart/eviction/replay
+requires a fresh preview. After an uncertain submission network failure check Queue first.
+
+Safe 400 codes: SOURCE_URL_INVALID, SOURCE_UNSUPPORTED, SOURCE_LIST_UNSUPPORTED,
+SOURCE_SORT_UNSUPPORTED, SOURCE_FILTER_UNSUPPORTED, SOURCE_RESOLVE_FAILED,
+SOURCE_PREVIEW_EXPIRED, SOURCE_BUSY, BATCH_SELECTION_INVALID. Current other-platform
+public profiles reject listing before extraction. Invalid schemas/ranges/options are 422;
+existing storage errors retain their codes. No silent ordering/filter fallback.
 
 ## Editor
 Planned Phase 10, not implemented.

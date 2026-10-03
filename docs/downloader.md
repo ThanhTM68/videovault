@@ -17,8 +17,9 @@ There is no resolve/download API endpoint, DB write, history inference, or backg
 
 `DownloaderAdapter` exposes `resolve`, `get_formats`, `download`, and frozen capability
 metadata. Phase 04 defaults to five concrete adapters through `AdapterRegistry`.
-`YtDlpAdapter` remains the shared single-video core; all yt-dlp imports and options stay
-in `services/downloader/ytdlp.py`. Explicit injected adapter mappings remain supported.
+`YtDlpAdapter` remains the shared single-video core; its yt-dlp imports/options stay
+in `services/downloader/ytdlp.py`. Phase 09 adds a restricted source-only wrapper in
+`services/downloader/source_ytdlp.py`. Explicit injected adapter mappings remain supported.
 Each operation creates its own YoutubeDL instance; no mutable extractor is shared.
 
 Detection uses the existing `Platform` enum for recognized HTTP(S) hosts, plus the
@@ -92,6 +93,41 @@ Redirects and CDN/media requests remain owned by yt-dlp. These controls limit in
 extractor families; they are not complete transport-level DNS/IP or rebinding protection.
 No generic fetch proxy, manual HTTP client, custom short-link redirect following, or
 DNS enforcement gateway is introduced. Stronger transport enforcement remains deferred.
+
+## Source listing and batch (Phase 09)
+
+SourceAdapterRegistry is separate from individual video detection. YouTube accepts exact
+`youtube.com`, `www.youtube.com`, `m.youtube.com`, HTTP(S), and `/@HANDLE` (ASCII 3–30
+letters/digits/underscore/dot/hyphen) or `/channel/UC` plus 22 safe identity characters.
+Optional `/videos` and trailing slash are allowed. Canonical URL is HTTPS www ending
+`/videos`; query/fragment parameters are discarded and never select alternate sorting.
+No `/c`, `/user`, playlist, watch, shorts/live tab, search, feed or arbitrary subdomain.
+Recognized public profile forms on the other four platforms reject listing without I/O.
+
+SourceYtDlp enables only `youtube:tab`, flat metadata, no download and no recursive
+single-video processing. The pinned extractor returns channel video entries lazily.
+It reads at most 100 entries, allowing at most 12 transport requests and no request
+starting after a 90-second monotonic deadline; an in-flight request retains the existing
+30-second socket timeout and finite retry limits. Empty continuation pages therefore
+cannot create an unbounded crawl. Concurrent enumeration is capped at two.
+
+YoutubeTab flat duration comes from lengthSeconds/lengthText; approximate dates are
+not enabled, and public view summaries may be rounded. Capabilities are listing and
+inclusive duration filtering only. Newest/oldest/views and date/view filtering return
+stable unsupported errors before network enumeration. Default source order preserves
+extractor order without claiming newest or whole-channel ranking. Missing duration
+excludes an entry only when a duration bound is requested; missing date/views remain null.
+N (strict 1–100) caps results after normalization, identity dedup and filtering within
+the first 100 entries. Unknown channel total stays null.
+
+Candidates require Youtube extractor identity, safe exact 11-character video ID and
+matching YouTube canonical URL/known source channel. Reject wrong families, malformed
+IDs, foreign canonical URLs, playlists, live/DRM/auth-only entries. Metadata uses bounded
+safe text/thumbnail projection; raw blobs, formats, streams and headers never reach the
+public API or preview cache. History/file flags are one batched DB query with no Google
+I/O. Preview creates no video/history/job/media rows. Submission accepts only IDs from
+a current cached preview, refreshes history and uses ordinary queue jobs. Existing
+single-video resolve/download, quality/probe, worker dedup and Local/Drive paths remain.
 
 ## Normalized models
 

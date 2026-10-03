@@ -761,6 +761,33 @@ footer {
 .hash {
   font-size: 0.8rem;
 }
+.batch-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.batch-form input:not([type='checkbox']) {
+  width: 100%;
+  min-width: 0;
+  padding: 0.7rem;
+  border: 1px solid #d4e0e4;
+  border-radius: 6px;
+  font: inherit;
+}
+.batch-preview {
+  margin-top: 1.5rem;
+}
+.batch-preview > h3 {
+  overflow-wrap: anywhere;
+}
+.batch-preview .form-actions {
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.batch-card p {
+  overflow-wrap: anywhere;
+}
 .video-details .options-grid button {
   margin-top: 0.5rem;
 }
